@@ -1,41 +1,40 @@
 #ifndef _TABLE_QUERY_H_
 #define _TABLE_QUERY_H_
 
-#include "tables.h"
+#include "table_pub.h"
 
-#undef  to_s
-#define to_s(X) #X
-
-#define FIND_BY_I(T, F)                \
-int T##_find_by_##F (T *r, int F) {    \
-	char sql[512];                     \
-                                       \
-	snprintf(sql, 512, "select * from %ss where %s = %d limit 1", to_lower(to_s(T)), to_s(F), F ); \
-	if(do_query(sql)) {                \
-		return -1;                     \
-	}                                  \
-	phrase(tf_##T, &r);                \
-                                       \
-    return 0;                          \
-}
-
-#define FIND_BY_C(T, F)                \
-int T##_find_by_##F (T *r, char* F) {  \
-	char sql[1024];                    \
-                                       \
-	snprintf(sql, 1024, "select * from %ss where %s = '%s' limit 1", to_lower(to_s(T)), to_s(F), F ); \
-	if(do_query(sql)) {                \
-		return -1;                     \
-	}                                  \
-	phrase(tf_##T, &r);                \
-                                       \
-	return 0;                          \
-}
+#define QUERY_MAX_SQL_LEN 2048
 
 
-FIND_BY_I(User, id)
-FIND_BY_C(User, name)
+#define _get_ti_by_name(name, ti)											\
+	ti = query_get_table_info_by_name(table_name);							\
+	_CHECK_RET(ti != (TI*)0, PR_ERR_TABLE);									\
+	_CHECK_RET(ti->bad_fnames == 1 || ti->bad_fnames == 0, PR_ERR_FLEN );	\
 
 
-#undef to_s
+#define _get_ti_by_tno(tno, ti)												\
+	ti = query_get_table_info_by_name(tno);									\
+	_CHECK_RET(ti != (TI*)0, PR_ERR_TABLE);									\
+	_CHECK_RET(ti->bad_fnames == 1 || ti->bad_fnames == 0, PR_ERR_FLEN );	\
+
+
+#define FIND(table, condtion , ret)
+
+const TI *query_get_table_info_by_name(const char *table_name);
+
+const TI *query_get_table_info_by_tno(const int tno);
+
+int find_rows_with_cond_with_tno  (const int  tno,         const char *condition_with_where , _FREE_ void **rows, int *num);
+
+int find_rows_with_cond_with_tname(const char *table_name, const char *condition_with_where , _FREE_ void **rows, int *num);
+
+int find_all_with_cond_with_tno  (const int  tno,         const char *condition_with_where , _FREE_ void **rows, int *num);
+
+int find_all_with_cond_with_tname(const char *table_name, const char *condition_with_where , _FREE_ void **rows, int *num);
+
+int find_with_cond_with_tno  (const int  tno,         const char *condition_with_where , _FREE_ void **rows, int *num);
+
+int find_with_cond_with_tname(const char *table_name, const char *condition_with_where , _FREE_ void **rows, int *num);
+
+
 #endif

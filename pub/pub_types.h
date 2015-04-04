@@ -1,5 +1,5 @@
-#ifndef _AGT_TYPES_H_
-#define _AGT_TYPES_H_
+#ifndef _PUB_TYPES_H_
+#define _PUB_TYPES_H_
 
 #include <inttypes.h>
 
@@ -16,7 +16,8 @@ typedef uint64_t  UINT64;
 typedef float     FLOAT;
 typedef double    DOUBLE;
 typedef char      CHAR;
-typedef char*     STR;
+typedef char      NCHAR;
+typedef char*     STRING;
 
 
 #define FT_INT8         0x00000001
@@ -28,12 +29,19 @@ typedef char*     STR;
 
 #define FT_CHAR         0x00000100
 #define FT_NCHAR        0x00000200
-#define FT_STR          0x00000400 /* string pointer, should never use */
+#define FT_STRING       0x00000400 /* string pointer, should never use */
 #define FT_BIN          0x00000800 /* bytes vector, should never use   */
 
 #define FT_UINT8        0x00001000
 #define FT_UINT16       0x00002000
 #define FT_UINT32       0x00004000
 #define FT_UINT64       0x00008000
+
+
+typedef struct FT_NAME_MAP{
+		INT32		type;
+		CHAR* const name;
+}FT_NAME_MAP;
+
 
 #endif
