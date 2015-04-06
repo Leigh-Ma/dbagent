@@ -1,11 +1,7 @@
 #ifndef _TABLES_H_
 #define _TABLES_H_
 
-#include "table_pub.h"
 #pragma pack(1)
-
-extern TI* 		g_all_tables[];
-extern INT32 	g_all_tables_num;
 
 /* Free to define the tables as you wish bellow */
 /* Do not use key Macros in your comments       */

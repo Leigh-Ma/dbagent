@@ -1,5 +1,11 @@
 #ifndef _AGT_PUB_H_
 #define _AGT_PUB_H_
+#include <assert.h>
+#include <stdlib.h>
+
+#define logger  printf
+#define debuger printf
+
 
 #define _CHECK_RET(should_be_true, ret)				\
 	if(!(should_be_true)) {							\

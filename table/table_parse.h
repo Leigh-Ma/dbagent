@@ -1,33 +1,6 @@
 #ifndef _TABLE_PARSE_H_
 #define _TABLE_PARSE_H_
 
-extern struct FT_NAME_MAP g_type_name_map[];
-/* *********************************************************************************
- * function: parse_field_type_name
- * return the string name of the field type
- * *********************************************************************************/
-char const *parse_field_type_name(INT32 type);
-
-/* *********************************************************************************
- * @parse_field_info_init
- * check and regulate table field information
- * *********************************************************************************/
-void parse_field_info_init(TF *f, const int num);
-
-/* *********************************************************************************
- * function: parse_field_from_str
- * parse table field data from it's string form in @p into buffer @buff
- * @len is a input output parameter,
- * *********************************************************************************/
-int parse_field_from_str(const TF *f, const char *p, int ex, char *buff, int *len) ;
-
-/* *********************************************************************************
- * function: parse_row_from_str
- * parse table row data from it's string form in @p into buffer @buff
- * @len is a input output parameter,
- * *********************************************************************************/
-int parse_row_from_str(const char *row, const TF *tfs, const int tfn, char *record, int *len);
-
 /* malloc memory error 	   */
 #define PR_ERR_MEM			-1
 
@@ -59,7 +32,7 @@ int parse_row_from_str(const char *row, const TF *tfs, const int tfn, char *reco
 #define PR_ERR_SLEN			8
 
 #define	_SPI_							'|'			/* filed value split identifier*/
-#define _parse_result(val)				val
+#define _parse_result(val)				printf("%s, parse result: %s(%d)\n",__FUNCTION__, #val, val), val
 #define _parse_result_ex(val, msg)		val
 
 #define _parse_warning(val)				val
@@ -83,9 +56,10 @@ int parse_row_from_str(const char *row, const TF *tfs, const int tfn, char *reco
 static inline void															\
 _AS_##category##digits(const TF *f, const char *p, char *buff, int *len) {	\
 	assert(1 == f->num);													\
-	*(category##digits *) buff = (category##digits) aotll(p);				\
+	*(category##digits *) buff = (category##digits) atoll(p);				\
 	*len = sizeof(category##digits);										\
 }
+
 
 _declare_parse_as_ints(INT,  8)
 _declare_parse_as_ints(INT,  16)
@@ -117,7 +91,7 @@ static inline void _AS_NCHAR(const TF *f, const char *p, char *buff, int *len) {
 }
 
 /*should never use, to avoid memory leak*/
-static inline void _AS_STRING(const TF *f, const char *p, char *buff, int *len) {
+static inline void _AS_STRING(const TF *f, const char *p, char **buff, int *len) {
 	char *sp = strchr(p, _SPI_), *danger;
 	int  length;
 
@@ -132,7 +106,8 @@ static inline void _AS_STRING(const TF *f, const char *p, char *buff, int *len) 
 			danger[length] = '\0';
 		}
 	}
-	*(char**)buff = danger;
+
+	*buff = danger;
 	*len = sizeof(char*);
 }
 
@@ -155,5 +130,5 @@ static inline void _AS_DOUBLE  (const TF *f, const char *p, char *buff, int *len
 	*len = sizeof(DOUBLE);
 }
 
-
+/************************************************************************************/
 #endif

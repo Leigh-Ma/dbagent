@@ -17,7 +17,7 @@ TF tf_User[] = {
 	{"pay"            ,	       sizeof(DOUBLE ),	     1,	 sizeof(DOUBLE ),	 FT_DOUBLE , },
 };/* End @User */
 const int tfn_User = sizeof(tf_User)/sizeof(TF);
-TI ti_User = {TNO_USER,	 sizeof(User),	 tf_User,	 tfn_User,	 "users",	 "User"};
+TI ti_User = {TNO_USER,	 sizeof(User),	 tf_User,	 TFN_USER,	 "users",	 "User"};
 
 
 /* Field descriptions of table @Server */
@@ -28,6 +28,6 @@ TF tf_Server[] = {
 	{"category"       ,	  16 * sizeof(NCHAR  ),	    16,	 sizeof(NCHAR  ),	 FT_NCHAR  , },
 };/* End @Server */
 const int tfn_Server = sizeof(tf_Server)/sizeof(TF);
-TI ti_Server = {TNO_SERVER,	 sizeof(Server),	 tf_Server,	 tfn_Server,	 "servers",	 "Server"};
+TI ti_Server = {TNO_SERVER,	 sizeof(Server),	 tf_Server,	 TFN_SERVER,	 "servers",	 "Server"};
 
 
