@@ -1,0 +1,79 @@
+#include "../table/table_pub.h"
+
+TCOM *table_com_init_with_ti(const UCOM *uc, const TI *ti) {
+    TCOM *tc = (TCOM*)0;
+    int status, i;
+    char condition[48] = {0};
+
+    if(ti == (TI*)0 || uc == (UCOM*)0 || uc->user == (User*)0) {
+        return tc;
+    }
+
+    tc = (TCOM*)malloc(sizeof(UCOM));
+    if(tc == (TCOM*)0) {
+        _flag_set_init_fail(uc->flags[ti->tno]);
+        return tc;
+    }
+
+    memset(tc, 0x00, sizeof(TCOM));
+    tc->table_no = ti->tfn;
+    tc->user_com = uc;
+
+    snprintf(condition, "where user_id = %d", uc->user->id);
+    status = find_rows_with_cond_with_ti(ti, condition , &tc->rows, &tc->row_num);
+
+    if(status == PR_OK) {
+        _flag_set_init_success(uc->flags[ti->tno]);
+        for(i = 0; i < tc->row_num && i< 1024; i++) {
+            _flag_set_init_success(tc->flags[ti->tno]);
+        }
+    } else {
+        _flag_set_init_fail(uc->flags[ti->tno]);
+        free(tc);
+        tc = (TCOM*)0;
+    }
+
+    return tc;
+}
+
+/* free tc on reload failure, different from user_com which is linked in a list chain */
+TCOM *table_com_reload(TCOM *tc, TI *ti) {
+    int status, i;
+    char condition[48] = {0};
+
+    if(tc == (TCOM*)0 || tc->user_com == (UCOM*)0 || tc->user_com->user == (User*)0) {
+        return tc;
+    }
+
+    if(tc->rows) {
+        free(tc->rows);
+        tc->row_num = 0;
+        memset(&tc->flags, 0x00, sizeof(tc->flags));
+    }
+
+    if(ti == (TI*)0) {
+        ti = query_get_table_info_by_tno(tc->table_no);
+        /* should never */
+        if(ti == (TI*)0) {
+            _flag_set_reload_fail(tc->user_com->flags[ti->tno]);
+            free(tc);
+            return (TCOM*)0;
+        }
+    }
+
+    snprintf(condition, "where user_id = %d", tc->user_com->user->id);
+    status = find_rows_with_cond_with_ti(ti, condition , &tc->rows, &tc->row_num);
+
+    if(status == PR_OK) {
+        _flag_set_reload_success(tc->user_com->flags[tc->table_no]);
+        for(i = 0; i < tc->row_num && i < 1024; i++) {
+            _flag_set_reload_success(tc->flags[i]);
+        }
+    } else {
+        _flag_set_reload_fail(tc->user_com->flags[tc->table_no]);
+        free(tc);
+        tc = (TCOM*)0;
+    }
+
+    return tc;
+}

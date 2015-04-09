@@ -1,0 +1,106 @@
+/* never use cache data, cache should be done by application logic */
+#include "integrate.bk"
+static PCOM app_data_com = {0};
+PCOM *g_app_data_com = &app_data_com;
+
+UCOM *get_user_com_by_name(const char* name) {
+    UCOM *uc = (UCOM*)0, *uctail;
+
+    if(name == (char*) 0 || name[0] == '\0') {
+        return uc;
+    }
+
+    uc = G_APPCOM->user_coms[(UINT8)name[0]];
+    for(uctail = uc; uc != (UCOM*)0; uctail = uc, uc = uc->next) {
+        if(0==strncmp(uc->user->name, name ,sizeof(uc->user->name))){
+            break;
+        }
+    }
+
+    if(uc == (UCOM*)0) {
+        uc = user_com_init_by_name(name);
+        /* append */
+        if(uctail == (UCOM *)0) {
+            G_APPCOM->user_coms[(UINT8)name[0]] = uc;
+        } else {
+            uctail->next = uc;
+        }
+    } else {
+        uc = user_com_reload(uc);
+    }
+
+    if(uc == (UCOM*)0) {
+        logger("Initialize user_com for user %s failed!!!\n", name);
+    }
+
+    return uc;
+}
+
+UCOM *get_user_com_by_id(UINT32 id) {
+    UCOM *uc, *uchead;
+    UINT16 i = 0;
+
+    for(i = 0; i < 256; i++) {
+        uc = G_APPCOM->user_coms[i];
+        for(; uc != (UCOM*)0; uc = uc->next) {
+            if(uc->user == (User*)0) {
+                logger("Warning: user_com exist with user null");
+            } else if(id == uc->user->id) {
+                break;
+            }
+        }
+    }
+
+    if(uc == (UCOM*)0) {
+        uc = user_com_init_by_id(id);
+        if(uc == (UCOM*)0) {
+            logger("Initialize user_com for user id: %llu failed!!!\n", id);
+        } else {
+            /* prepend */
+            uchead = G_APPCOM->user_coms[(UINT8)uc->user->name[0]];
+            uc->next = uchead;
+            G_APPCOM->user_coms[(UINT8)uc->user->name[0]] = uc;
+        }
+    } else {
+        uc = user_com_reload(uc);
+    }
+
+    return uc;
+}
+
+UCOM *delete_user_com(const char* name) {
+
+    UCOM *uc,*uctail;
+
+    if(name == (char*) 0 || name[0] == '\0') {
+        return (UCOM*)0;
+    }
+
+    uc = G_APPCOM->user_coms[(UINT8)name[0]];
+    for(uctail = uc; uc != (UCOM*)0; uctail = uc, uc = uc->next) {
+        if(0==strcmp(uc->user->name, name)){
+            break;
+        }
+    }
+
+    if(uc != (UCOM*)0) {
+        if(uctail == G_APPCOM->user_coms[(UINT8)name[0]]) {
+            G_APPCOM->user_coms[(UINT8)name[0]] = (UCOM*)0;
+        } else {
+            uctail->next = uc->next;
+        }
+        uc->next = (UCOM*)0;
+    }
+
+    return uc;
+}
+
+
+
+void destroy_user_com(const char* name) {
+    UCOM *uc = delete_user_com(name);
+
+    if(uc != (UCOM*)0) {
+       user_com_destroy(uc);
+    }
+}

@@ -24,8 +24,44 @@ extern  const int tfn_Server;
 extern  TI ti_Server;
 
 
+/* Field descriptions of table @Town 		*/
+#define TNO_TOWN	3
+#define TNO_Town	3		/* alternative 	*/
+#define TFN_TOWN		 ( sizeof(tf_Town)/sizeof(TF) )
+extern  TF tf_Town[];
+extern  const int tfn_Town;
+extern  TI ti_Town;
+
+
+/* Field descriptions of table @Resource 		*/
+#define TNO_RESOURCE	4
+#define TNO_Resource	4		/* alternative 	*/
+#define TFN_RESOURCE		 ( sizeof(tf_Resource)/sizeof(TF) )
+extern  TF tf_Resource[];
+extern  const int tfn_Resource;
+extern  TI ti_Resource;
+
+
+/* Field descriptions of table @Army 		*/
+#define TNO_ARMY	5
+#define TNO_Army	5		/* alternative 	*/
+#define TFN_ARMY		 ( sizeof(tf_Army)/sizeof(TF) )
+extern  TF tf_Army[];
+extern  const int tfn_Army;
+extern  TI ti_Army;
+
+
+/* Field descriptions of table @Item 		*/
+#define TNO_ITEM	6
+#define TNO_Item	6		/* alternative 	*/
+#define TFN_ITEM		 ( sizeof(tf_Item)/sizeof(TF) )
+extern  TF tf_Item[];
+extern  const int tfn_Item;
+extern  TI ti_Item;
+
+
 #define TNO_MINIMUM	 1 
 
-#define TNO_MAXIMUM	 2
+#define TNO_MAXIMUM	 6
 
 #endif

@@ -1,0 +1,166 @@
+#include "../table/table_pub.h"
+
+UCOM *user_com_init_by_name(const char *name) {
+    UCOM *uc = (UCOM *)0;
+    INT32 num = 1, status;
+
+    if(name == (char*)0 || name[0] == '\0') {
+        return uc;
+    }
+
+    uc = (UCOM*)malloc(sizeof(UCOM));
+    if(uc == (UCOM*)0) {
+        return uc;
+    }
+    memset(uc, 0x00, sizeof(UCOM));
+
+    FIND_WITH_STR(User, "name", name, &uc->user, &num, status);
+
+    if(status != PR_OK) {
+        free(uc);
+        uc = (UCOM*) 0;
+    } else {
+        _flag_set_init(uc->flag_user);
+    }
+
+    return uc;
+}
+
+UCOM *user_com_init_by_id(UINT32 id) {
+    UCOM *uc = (UCOM *)0;
+    INT32 num = 1, status;
+
+
+    uc = (UCOM*)malloc(sizeof(UCOM));
+    if(uc == (UCOM*)0) {
+        return uc;
+    }
+    memset(uc, 0x00, sizeof(UCOM));
+
+    FIND_WITH_INT(User, "id", id, &uc->user, &num, status);
+
+    if(status != PR_OK) {
+        free(uc);
+        uc = (UCOM*) 0;
+    } else {
+        _flag_set_init(uc->flag_user);
+    }
+
+    return uc;
+}
+
+/* reload should not release uc, it's linked in the list chain */
+UCOM *user_com_reload(UCOM *uc) {
+    INT32 num = 1, status = PR_OK;
+
+    if(uc == (UCOM*)0 || uc->user==(User*)0) {
+        return uc;
+    }
+
+    free(uc->user);
+    uc->user = (User*)0;
+
+    FIND(User, uc->user->id, &uc->user, &num, status);
+
+    if(status != PR_OK) {
+        _flag_set_reload_failed(uc->flag_user);
+        uc = (UCOM*) 0;
+    } else {
+        _flag_set_reload_success(uc->flag_user);
+    }
+
+    return uc;
+}
+
+UCOM *user_com_reload(UCOM *uc) {
+    INT32 num = 1, status = PR_OK;
+
+    if(uc == (UCOM*)0 || uc->user==(User*)0) {
+        return uc;
+    }
+
+    free(uc->user);
+    uc->user = (User*)0;
+
+    FIND(User, uc->user->id, &uc->user, &num, status);
+
+    if(status != PR_OK) {
+        _flag_set_reload_failed(uc->flag_user);
+        uc = (UCOM*) 0;
+    } else {
+        _flag_set_reload_success(uc->flag_user);
+    }
+
+    return uc;
+}
+
+void user_com_destroy(UCOM *uc) {
+    TCOM *tc;
+    INT32 i;
+
+    if(uc == (UCOM *)0) {
+        return;
+    }
+
+    for(i = TNO_MINIMUM; i <= TNO_MAXIMUM; i++) {
+        if(uc->flags[i] && (tc = uc->has[i])) {
+            table_com_free(tc);
+        }
+    }
+
+    free(uc);
+}
+
+TCOM *user_com_get_tc_by_ti(UCOM *uc, const TI *ti) {
+    TCOM *tc = (TCOM*)0;
+
+    if(uc == (UCOM *)0 || ti == (TI*)0) {
+        return tc;
+    }
+
+    tc = uc->has[ti->tno];
+
+    if(tc == (TCOM*)0) {
+        tc = table_com_init_with_ti(uc, ti);
+        uc->has[ti->tno] = tc;
+    }else if(_do_not_use_cache(uc->flags[ti->tno])) {
+        tc = table_com_reload(tc);
+    }
+
+    if(tc == (TCOM*)0) {
+        logger("Initialize table_com for table <%s> failed!!!\n", ti->name);
+    }
+
+    return tc;
+}
+
+TCOM *user_com_get_tc_by_tname(UCOM *uc, char *tname) {
+    TCOM *tc = (TCOM*)0;
+    TI   *ti;
+
+    if(tname == (char*)0 || tname[0] == '\0') {
+        return tc;
+    }
+
+    ti = query_get_table_info_by_name(tname);
+
+    return user_com_get_tc_by_ti(uc, ti);
+}
+
+TCOM *user_com_get_tc_by_tno(UCOM *uc, INT32 tno) {
+    TCOM *tc = (TCOM*)0;
+    TI   *ti;
+
+    ti = query_get_table_info_by_name(tno);
+
+    return user_com_get_tc_by_ti(uc, ti);
+}
+
+TCOM *user_com_save_tc_by_tno(UCOM *uc, INT32 tno) {
+    TCOM *tc = (TCOM*)0;
+    TI   *ti;
+
+    ti = query_get_table_info_by_name(tno);
+
+    return user_com_get_tc_by_ti(uc, ti);
+}

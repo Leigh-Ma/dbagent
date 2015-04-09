@@ -41,7 +41,7 @@ static void *agt_listener_thread(void *params) {
       //TODO
       //start a new db connection and assign it to the client
       //notify the client ?
-    	agt_client_handle(con);
+        agt_client_handle(con);
     }
   }
 
@@ -50,40 +50,40 @@ static void *agt_listener_thread(void *params) {
 }
 
 void *agt_client_handler_thread(void *params){
-	db_init();
-	while(1){
-		/*serving*/
-	}
-	db_close();
-	pthread_exit();
+    db_init();
+    while(1){
+        /*serving*/
+    }
+    db_close();
+    pthread_exit();
 }
 
 int agt_listener_start() {
   //start a thread to waiting connections from clients
-	int status = pthread_create(&g_listener_thread, (pthread_attr_t*)NULL,
-			agt_listener_thread, (void*)NULL);
+    int status = pthread_create(&g_listener_thread, (pthread_attr_t*)NULL,
+            agt_listener_thread, (void*)NULL);
 
-	if( 0!= status) {
-	    logger("pthread_create create socket listener error: %d", status);
-	} else {
-	    logger("Connection Listener thread has been started");
+    if( 0!= status) {
+        logger("pthread_create create socket listener error: %d", status);
+    } else {
+        logger("Connection Listener thread has been started");
     }
-	return status;
+    return status;
 }
 
 int agt_client_handle(int client){
-	int identifier = client, status;
-	pthread_t  handler_thread;
+    int identifier = client, status;
+    pthread_t  handler_thread;
 
     pthread_mutex_lock(&g_client_handle_mutex);
-	status = pthread_create(&handler_thread, (pthread_attr_t*)NULL,
-			agt_client_handler_thread, (void*)&identifier);
-	if( 0!= status) {
-	    logger("pthread_create create socket listener error: %d", status);
-	} else {
-		logger("Connection Listener thread has been started");
-	}
-	pthread_mutex_unlock(&g_client_handle_mutex);
+    status = pthread_create(&handler_thread, (pthread_attr_t*)NULL,
+            agt_client_handler_thread, (void*)&identifier);
+    if( 0!= status) {
+        logger("pthread_create create socket listener error: %d", status);
+    } else {
+        logger("Connection Listener thread has been started");
+    }
+    pthread_mutex_unlock(&g_client_handle_mutex);
     return status;
 }
 
