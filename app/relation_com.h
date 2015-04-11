@@ -8,9 +8,11 @@ typedef struct table_data_compress{
     UINT32                          flag_rc;        /* leader flag                          */
 
     INT32                           record_num;     /* elements in list record              */
+    INT32                           query_num;      /* number of rows want to query         */
     TI                              *ti;
     char                            *record;        /* char pointer can be easily operated  */
     TCOM                            *next;          /* record ring                          */
+    TCOM                            *recycle;       /* leader only, @next recycle list      */
     TCOM                            *has;           /* related data of this record          */
     TCOM                            *belong;        /* this record belongs to               */
     char                            *should_free;   /* the rows from database, should free  */
@@ -25,6 +27,10 @@ typedef struct leading_data_compress {
     RCOM                            *leader;        /* single: leader->record_num = 1       */
     struct leading_data_compress    *next;          /* maintain in list*/
 }LCOM;
+
+#define _set_tc_flag(tc, flag)
+#define _get_tc_flag(tc, flag)
+#define _clr_tc_flag(tc, flag)
 
 
 #endif

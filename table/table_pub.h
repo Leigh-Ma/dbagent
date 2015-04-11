@@ -29,18 +29,19 @@ typedef struct tag_FILED_DESC {
 
 #define FIELD_NAME_LEN_MAX              511
 typedef struct tag_TABLE_INFO {
-    const int           tno;            /*TNO_XXX, table id in application      */
+    const int           tno;            /* TNO_XXX, table id in application     */
     const int           row_size;
     TF                  *tfs;
     int                 tfn;
     const char          *name;
     const char          *name_ex;
+    const char          *far_id;        /* string: tablename_id                 */
 
     char                field_names[FIELD_NAME_LEN_MAX + 1];
-                                        /*string: id, level, vip, ...           */
-    int                 bad_fnames;     /*@fnames length not long enough        */
-    int                 names_len;      /*fnames or far_names string length     */
-    char                *far_names;     /*@malloc memory for field name list    */
+                                        /* string: id, level, vip, ...          */
+    int                 bad_fnames;     /* @fnames length not long enough       */
+    int                 names_len;      /* fnames or far_names string length    */
+    char                *far_names;     /* @malloc memory for field name list   */
 }TI;
 
 #define TI_OF(table)                    g_all_tables_info[TNO_##table]

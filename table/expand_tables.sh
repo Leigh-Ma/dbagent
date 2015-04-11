@@ -25,7 +25,7 @@ print "TF tf_"$2"[] = {"
 if($1 == "TABLE_END") {
 print "};/* End @"$2" */"
 print "const int tfn_"$2" = sizeof(tf_"$2")/sizeof(TF);"
-printf "TI ti_"$2" = {TNO_"toupper($2)",\t sizeof("$2"),\t tf_"$2",\t TFN_"toupper($2)",\t \""tolower($2)"s\",\t \""$2"\"};\n\n\n"
+printf "TI ti_"$2" = {TNO_"toupper($2)",\t sizeof("$2"),\t tf_"$2",\t TFN_"toupper($2)",\t \""tolower($2)"s\",\t \""$2"\",\t \""tolower($2)"_id\"};\n\n\n"
 }
 if($1 == "FIELD") {
 printf "\t{\"%-15s ,\t       sizeof(%-7s),\t %5d,\t sizeof(%-7s),\t FT_%-7s, },\n", $3"\"",     $2,  1, $2, $2
