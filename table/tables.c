@@ -13,7 +13,7 @@ _INIT_ void tables_init(){
     #include "table_info_init.inc"
 }
 
-_TRY_ int table_rows_release(const char *name, void *rows, int num) {
+_TRY_ int table_rows_release_by_name(const char *name, void *rows, int num) {
     char *p = (char*)rows, *q = (char*)rows;
     int i, j;
     TI *ti;
@@ -22,6 +22,27 @@ _TRY_ int table_rows_release(const char *name, void *rows, int num) {
     _CHECK_RET(name && rows, PR_ERR_PARAM);
 
     _get_ti_by_tname(name, ti);
+
+    for(j = 0, tf = ti->tfs; j < ti->tfn; j++, tf++) {
+        if(FT_SHOULD_FREE(tf->type)) {
+            for(i = 0 ;i < num; i++) {
+                p = q + i * ti->row_size + tf->offset;
+                if(*(char**)p) {
+                    free(*(char**)p);
+                }
+            }
+        }
+    }
+    free(rows);
+    return PR_OK;
+}
+
+_TRY_ int table_rows_release_by_ti(TI *ti, void *rows, int num) {
+    char *p = (char*)rows, *q = (char*)rows;
+    int i, j;
+    TF *tf;
+
+    _CHECK_RET(ti && rows, PR_ERR_PARAM);
 
     for(j = 0, tf = ti->tfs; j < ti->tfn; j++, tf++) {
         if(FT_SHOULD_FREE(tf->type)) {

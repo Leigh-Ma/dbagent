@@ -104,9 +104,9 @@ int find_rows_with_cond_with_ti(const TI *ti, const char *condition_with_where ,
 
     p = ti->bad_fnames == 0 ? ti->field_names : ti->far_names;
     if(*num <= 0) {
-        snprintf(sql, QUERY_MAX_SQL_LEN, "select %s from %s %s", p, ti->name, condition);
+        snprintf(sql, QUERY_MAX_SQL_LEN, "select  %s from %s %s", p, ti->name, condition);
     } else {
-        snprintf(sql, QUERY_MAX_SQL_LEN, "select %s from `%s` %s limit %d", p, ti->name, condition, *num);
+        snprintf(sql, QUERY_MAX_SQL_LEN, "select  %s from `%s` %s limit %d", p, ti->name, condition, *num);
     }
 
     _CHECK_RET_EX(sql[QUERY_MAX_SQL_LEN-2] == '\0', PR_ERR_SLEN, sql);

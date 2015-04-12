@@ -1,8 +1,10 @@
 #ifndef _TBALE_PUB_H_
 #define _TBALE_PUB_H_
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <memory.h>
 #include "../pub/pub.h"
 
 #define is_big_endian g_is_big_endian
