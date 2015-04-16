@@ -217,6 +217,9 @@ TCOM *table_com_destroy(TCOM* tc) {
         if(next->has_next) {
             table_com_destroy(next->has_next);
         }
+        if(next->recycle) {
+            table_com_destroy(next->recycle);
+        }
 
         if(next->belong) {
             last_has = next->belong->has;
@@ -267,6 +270,7 @@ TCOM *table_com_show_data(TCOM* tc) {
     return tc;
 }
 
+/* the return value of the bellow functions should not be freed */
 TCOM *table_com_find(TCOM *tc, table_com_satisfy satisfy) {
     TCOM *row;
 
@@ -274,6 +278,16 @@ TCOM *table_com_find(TCOM *tc, table_com_satisfy satisfy) {
         if(satisfy(row)) {
             break;
         }
+    }
+
+    return row;
+}
+
+TCOM *table_com_each_do(TCOM *tc, table_com_proccess proccess) {
+    TCOM *row;
+
+    for(row = tc; row != (TCOM*)0; row = row->next) {
+        proccess(row);
     }
 
     return row;
@@ -316,6 +330,24 @@ TCOM *row_com_reload_data(TCOM* tc) {
     _set_tc_flag_attr(tc, "data");
     free(reload);
 
+    return tc;
+}
+
+/* save current row only, update data in the database */
+TCOM *row_com_save_data(TCOM* tc) {
+    if(0 != row_save(tc->ti, tc->record) )
+    {
+        _set_tc_flag_error(tc, "save");
+    }
+    return tc;
+}
+
+/* insert current row only, insert data into database */
+TCOM *row_com_insert_data(TCOM* tc) {
+    if(0 != row_insert(tc->ti, tc->record) )
+    {
+        _set_tc_flag_error(tc, "insert");
+    }
     return tc;
 }
 

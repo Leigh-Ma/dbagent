@@ -44,6 +44,8 @@ typedef struct leading_data_compress {
 
 
 typedef UINT8 (*table_com_satisfy)(TCOM *);
+typedef void* (*table_com_proccess)(TCOM *);
+
 TCOM *table_com_set_condition(TCOM* tc, const char *condition);
 TCOM *table_com_init_by_ti(TI *ti) ;
 TCOM *table_com_init_by_tname(const char *table_name) ;
@@ -51,11 +53,14 @@ TCOM *table_com_init_by_tno(const UINT32 table_no);
 TCOM *table_com_load_data(TCOM* tc, const char *condition);
 TCOM *table_com_release_data(TCOM* tc);
 TCOM *table_com_reload_data(TCOM* tc, const char *condition);
+TCOM *table_com_destroy(TCOM* tc);
 RCOM *table_com_to_row_com(TCOM *tc);
 TCOM *table_com_show_data(TCOM* tc);
 TCOM *table_com_find(TCOM *tc, table_com_satisfy satisfy);
 
 TCOM *row_com_show_data(TCOM* tc);
+TCOM *row_com_insert_data(TCOM* tc);
+TCOM *row_com_save_data(TCOM* tc);
 TCOM *row_com_reload_data(TCOM* tc);
 TCOM *row_com_find_or_create_has(TCOM* tc, const char *table_name);
 TCOM *row_com_has_table_com(TCOM* tc, const char *table_name, const char *condition);

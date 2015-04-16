@@ -39,6 +39,8 @@ int main() {
        table_com_show_data(user->leader);
        u =  table_com_find(user->leader, the_user);
        row_com_show_data(u);
+       row_save(u->ti, u->record);
+       row_insert(u->ti, u->record);
        town = row_com_has_table_com(user->leader, "towns", (char*)0);
        table_com_show_data(town);
        row_com_reload_data(town->next);
@@ -49,6 +51,6 @@ int main() {
            sleep(3);
        }
     }
-    scanf("%d %d", &num, &status);
+    //scanf("%d %d", &num, &status);
     return 0;
 }

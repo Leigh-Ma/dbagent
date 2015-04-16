@@ -3,7 +3,6 @@
 #include <netinet/in.h>
 #include <pthread.h>
 
-#include "agt_dbg.h"
 #include "agt_man.h"
 
 extern const unsigned short g_server_port;
@@ -90,5 +89,6 @@ int agt_client_handle(int client){
 int agt_man_main() {
   agt_listener_start();
   //Timely check the status and close connection if necessary
+  return 0;
 }
 

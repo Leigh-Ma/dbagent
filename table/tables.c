@@ -65,76 +65,22 @@ void tables_show() {
     }
 }
 
-#define _show_begin(tf)                                     \
-    switch((tf)->type) {                                    \
-
-#define _show_end(tf)                                       \
-    default:                                                \
-        printf("%s: *error*, ", (tf)->name);                \
-        break;                                              \
-    }
-
-#define _show_try(type, tf, p, fmt)                         \
-    case FT_##type :                                        \
-    {                                                       \
-        type val = *((type *)(p));                          \
-        printf("%s: "fmt", ", (tf)->name,  val);            \
-    }                                                       \
-    break;
-
-#define _show_try_string(type, tf, p , fmt)                 \
-    case FT_##type :                                        \
-    {                                                       \
-        printf("%s: \""fmt"\", ", (tf)->name, (char*) (p)); \
-    }                                                       \
-    break;
-
-#define _show_try_far_string(type, tf, p , fmt)             \
-    case FT_##type :                                        \
-    {                                                       \
-        printf("%s: \""fmt"\", ", (tf)->name, *(char**)(p));\
-    }                                                       \
-    break;
-
 
 int table_rows_show(const char *name, const void *rows, int num) {
-    void *p = rows;
-    int i, j;
+    int i;
     TI *ti;
-    TF *tf;
 
     _CHECK_RET(name && rows, PR_ERR_PARAM);
 
     _get_ti_by_tname(name, ti);
 
     for(i = 0; i< num; i++) {
-        printf("%3d %s: { ", i, ti->name_ex);
-        for(j = 0, tf = ti->tfs; j < ti->tfn; tf++, j++) {
-            p = (void *)((char*)rows + i * ti->row_size + tf->offset);
-            _show_begin(tf)
-                _show_try_string(NCHAR,  tf, p,  "%s")
-                _show_try_far_string(STRING, tf, p,  "%s")
-                _show_try(INT8,    tf, p, "%d")
-                _show_try(INT16,   tf, p, "%d")
-                _show_try(INT32,   tf, p, "%d")
-                _show_try(INT64,   tf, p, "%lld")
-
-                _show_try(FLOAT,   tf, p, "%f")
-                _show_try(DOUBLE,  tf, p, "%lf")
-
-                _show_try(CHAR,    tf, p,  "%c")
-
-                _show_try(UINT8,   tf, p,  "%u")
-                _show_try(UINT16,  tf, p,  "%u")
-                _show_try(UINT32,  tf, p,  "%u")
-                _show_try(UINT64,  tf, p,  "%llu")
-            _show_end(tf)
-        }
-        printf("} >\n");
+        row_show(ti, (void*)((char*)rows + i*ti->row_size));
     }
 
     return PR_OK;
 }
+
 void table_info_show(TI *ti) {
     TF *tf = (TI *)0;
     int i = 1;

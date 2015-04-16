@@ -57,6 +57,7 @@ typedef struct tag_TABLE_INFO {
 #include "table_query.h"
 #include "table_info.h"
 #include "relations.h"
+#include "rows.h"
 
 extern const struct FT_NAME_MAP g_type_name_map[];
 extern const int    g_field_type_num;
@@ -64,6 +65,7 @@ extern char    g_is_big_endian;
 extern TI *g_all_tables_info[];
 
 _INIT_ void tables_init();
+void table_info_show(TI *ti);
 void tables_show();
 int  table_rows_show(const char *name, const void *rows, int num);
 _TRY_ int table_rows_release(const char *name, void *rows, int num);
@@ -110,5 +112,6 @@ int find_with_cond_with_tno  (const int  tno,         const char *condition_with
 
 int find_with_cond_with_tname(const char *table_name, const char *condition_with_where , _FREE_ void **rows, int *num);
 
+int find_rows_with_cond_with_ti(const TI *ti, const char *condition_with_where , _FREE_ void **rows, int *num);
 
 #endif
