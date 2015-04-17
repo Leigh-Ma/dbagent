@@ -58,6 +58,7 @@ DIOB *iob_copy(DIOB *iob) {
     new_size = new_num * (sizeof(struct iovec) + iob->iov_len );
     new_base =(char*)malloc(new_size);
     if(new_base == (char*)0) {
+        free(cp);
         return (DIOB *)0;
     }
 
@@ -67,14 +68,18 @@ DIOB *iob_copy(DIOB *iob) {
     memcpy(new_base, iob->iovs, sizeof(struct iovec) * new_num);
     memcpy(new_base + new_num * sizeof(struct iovec), iob->base, new_num * iob->iov_len);
 
-    cp->flag = iob->flag;
-    cp->iov_index = iob->iov_index;
-    cp->iov_len = iob->iov_len;
-    cp->iov_offset = iob->iov_offset;
+    cp->flag        = iob->flag;
+    cp->iov_num     = new_num;
+    cp->iov_index   = iob->iov_index;
+    cp->iov_len     = iob->iov_len;
+    cp->iov_offset  = iob->iov_offset;
 
     cp->iovs = (DIOB *)new_base;
     cp->base = new_base + new_num * sizeof(struct iovec);
     cp->size = new_num * iob->iov_len;
+    for(new_num = 0; new_num < cp->iov_num; new_num) {
+        cp->iovs[new_num].iov_base = cp->base + cp->iov_len * new_num;
+    }
 
     return cp;
 }
