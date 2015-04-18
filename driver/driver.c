@@ -1,5 +1,5 @@
 #include "driver.h"
-INT32 dr_init(DB_DR *hdr, DB_CFG *cfg) {
+INT32 do_init(DB_DR *hdr, DB_CFG *cfg) {
     if(hdr == (DB_DR *)0) {
        return -1;
     }
@@ -7,7 +7,7 @@ INT32 dr_init(DB_DR *hdr, DB_CFG *cfg) {
     return hdr->opr->dr_init(hdr, cfg);
 }
 
-DB_CON *dr_new_connector(DB_DR *hdr) {
+DB_CON *do_new_connector(DB_DR *hdr) {
     void    *db_con = (void*)0;
     DB_CON  *hdc = (DB_CON*)0;
 
@@ -15,7 +15,7 @@ DB_CON *dr_new_connector(DB_DR *hdr) {
         return (DB_CON *)0;
     }
 
-    db_con = hdr->opr->dr_connector(hdr, hdc);
+    db_con = hdr->opr->dr_connector(hdr);
     if(db_con == (void*)0) {
         return  (DB_CON *)0;
     }
@@ -42,9 +42,8 @@ DB_CON *dr_new_connector(DB_DR *hdr) {
     return hdc;
 }
 
-INT32 co_connect(DB_CON *hdc) {
+INT32 do_connect(DB_CON *hdc) {
     INT32   status;
-    DB_CON  *n, *m;
 
     if(hdc == (DB_CON*)0) {
         return -1;
@@ -54,13 +53,13 @@ INT32 co_connect(DB_CON *hdc) {
     if(0 == status) {
         dr_lock(hdc->driver);
         hdc->driver->linked += 1;
-        hdr_unlock(hdc->driver);
+        dr_unlock(hdc->driver);
     }
 
     return status;
 }
 
-INT32 co_close(DB_CON *hdc) {
+INT32 do_close(DB_CON *hdc) {
     DB_DR   *hdr;
     DB_CON  *n, *m;
 
@@ -85,10 +84,31 @@ INT32 co_close(DB_CON *hdc) {
     return 0;
 }
 
-INT32 dr_end(DB_DR *hdr) {
+INT32 do_transaction(DB_CON *hdc) {
+    if(hdc == (DB_CON*)0) {
+        return -1;
+    }
+    return hdc->driver->opr->co_tran_begin(hdc);
+}
+
+INT32 do_commit(DB_CON *hdc) {
+    if(hdc == (DB_CON*)0) {
+        return -1;
+    }
+    return hdc->driver->opr->co_tran_commit(hdc);
+}
+
+INT32 do_rollback(DB_CON *hdc) {
+    if(hdc == (DB_CON*)0) {
+        return -1;
+    }
+    return hdc->driver->opr->co_tran_rollback(hdc);
+}
+
+INT32 do_destroy(DB_DR *hdr) {
     if(hdr == (DB_DR*)0) {
         return -1;
     }
-    return hdr->opr->dr_end(hdr);
+    return hdr->opr->dr_destroy(hdr);
 }
 

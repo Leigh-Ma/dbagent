@@ -1,5 +1,8 @@
 #ifndef _DRIVER_IO_H_
 #define _DRIVER_IO_H_
+#include "../pub/pub.h"
+#include <pthread.h>
+#include <sys/uio.h>
 
 #define IOV_BLOCK_SIZE      4096
 
@@ -15,12 +18,6 @@
 #define IOBF_CACHE_STRS     0x00000002      /* data is a char*[]                                        */
 #define IOBF_CACHE_BIN      0x00000004      /* data is in binary form                                   */
 
-
-#define IOB_OK          0
-#define IOB_ERR_PARAMS  1
-#define IOB_ERR_MEM     2
-#define IOB_ERR_FULL    3
-#define IOB_ERR_FLAG    4
 
 /* a continuous memory buff allocated at base,
  * split into @iov_len blocks of memory of same size IOV_SIZE
@@ -59,5 +56,6 @@ DIOB *iob_copy(DIOB *iob);
 DIOB *iob_release(DIOB* iob);
 void  iob_destroy(DIOB* iob);
 INT32 iob_cache(DIOB *iob, void *data, INT32 size, UINT32 flag, DIOB_CB *callback);
+INT32 iob_probe(DIOB *iob);
 
 #endif

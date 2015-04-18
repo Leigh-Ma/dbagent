@@ -1,6 +1,9 @@
 #ifndef _DRIVER_H_
 #define _DRIVER_H_
-#include "utils/io.h"
+#include "../pub/pub.h"
+#include <pthread.h>
+#include "../utils/io.h"
+
 
 #define db_lock_t           pthread_mutex_t
 #define db_thread_t         pthread_t
@@ -78,11 +81,14 @@ typedef INT32 (co_close_t)(DB_CON *db_con);
 /*begin a transaction on the connection         */
 typedef INT32 (co_tran_begin_t)(DB_CON *hdc);
 
-/*end a transaction on the connection         */
-typedef INT32 (co_tran_end_t)(DB_CON *hdc);
+/*commit a transaction on the connection        */
+typedef INT32 (co_tran_commit_t)(DB_CON *hdc);
+
+/*rollback a transaction on the connection      */
+typedef INT32 (co_tran_rollback_t)(DB_CON *hdc);
 
 /*end using driver                              */
-typedef INT32 (dr_end_t)(DB_DR *hdr);
+typedef INT32 (dr_destroy_t)(DB_DR *hdr);
 
 
 typedef struct db_operates {
@@ -94,8 +100,9 @@ typedef struct db_operates {
     co_disconnect_t     *co_diconnect;
     co_close_t          *co_close;
     co_tran_begin_t     *co_tran_begin;
-    co_tran_end_t       *co_tran_end;
-    dr_end_t            *dr_end;
+    co_tran_commit_t    *co_tran_commit;
+    co_tran_rollback_t  *co_tran_rollback;
+    dr_destroy_t        *dr_destroy;
 
 }DB_OPR;
 

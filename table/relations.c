@@ -3,9 +3,10 @@
 TCOM *table_com_set_condition(TCOM* tc, const char *condition) {
     TCOM *belong = (TCOM*)0;
 
-    if( tc==(TCOM*)0 ) {
-        return (TCOM*)0;
-    }
+    _CHECK_PARAMS_RET(
+        tc!=(TCOM*)0,
+        (TCOM*)0
+    );
 
     _set_tc_flag_error(tc, "condition");
     if(condition == (char*)0 || *condition == '\0') {
@@ -47,13 +48,19 @@ TCOM *table_com_set_condition(TCOM* tc, const char *condition) {
 TCOM *table_com_init_by_ti(TI *ti) {
     TCOM *tc = (TCOM*)0;
 
-    _CHECK_PARAMS_RET(ti != (TI*)0, tc);
+    _CHECK_PARAMS_RET(
+        ti != (TI*)0,
+        tc
+    );
 
     tc = (TCOM*) malloc(sizeof(TCOM));
-    if(tc == (TCOM*)0) {
-        logger("Allocate memory for <%s>'s TCOM error.\n", ti->name_ex);
-        return tc;
-    }
+
+    _CHECK_RET_EX(
+        tc != (TCOM*)0,
+        (TCOM*)0,
+        "Allocate memory for TCOM error.\n"
+    )
+
 
     memset(tc, 0x00, sizeof(TCOM));
     tc->table_no = ti->tno;
@@ -69,10 +76,6 @@ TCOM *table_com_init_by_tname(const char *table_name) {
     ti = query_get_table_info_by_name(table_name);
     tc = table_com_init_by_ti(ti);
 
-    if(tc == (TCOM*)0) {
-        logger("Initialization for <%s>'s TCOM error.\n", table_name);
-    }
-
     return tc;
 }
 
@@ -83,10 +86,6 @@ TCOM *table_com_init_by_tno(const UINT32 table_no) {
     ti = query_get_table_info_by_tno(table_no);
     tc = table_com_init_by_ti(ti);
 
-    if(tc == (TCOM*)0) {
-        logger("Initialization for table no.<%d>'s TCOM error.\n", table_no);
-    }
-
     return tc;
 }
 
@@ -96,12 +95,13 @@ TCOM *table_com_init_by_tno(const UINT32 table_no) {
  * should be used only when @tc's group leader
  */
 TCOM *table_com_load_data(TCOM* tc, const char *condition) {
-    INT32 status = PR_OK;
+    INT32 status = 0;
     TCOM  *more_tc, *last_tc;
 
-    if(tc == (TCOM*)0) {
-        return tc;
-    }
+    _CHECK_PARAMS_RET(
+        tc != (TCOM*)0,
+        (TCOM*)0
+    )
 
     _set_tc_flag_attr(tc, "group");             /* group leader record */
 
@@ -115,9 +115,10 @@ TCOM *table_com_load_data(TCOM* tc, const char *condition) {
     tc->record_num = tc->query_num;
     status = find_rows_with_cond_with_ti(tc->ti, tc->condition, &tc->should_free, &tc->record_num);
 
-    if(status != PR_OK || tc->should_free == (char*)0) {
-        return tc;
-    }
+    _CHECK_RET(
+        status == 0,
+        tc
+    )
 
     _clr_tc_flag_error(tc, "query");
 
@@ -160,7 +161,7 @@ TCOM *table_com_load_data(TCOM* tc, const char *condition) {
 TCOM *table_com_release_data(TCOM* tc) {
     TCOM  *next;
 
-    if(tc == (char*)0 || !_get_tc_flag_attr(tc, "group")) {
+    if(tc == (TCOM*)0 || !_get_tc_flag_attr(tc, "group")) {
         return tc;
     }
 
@@ -204,7 +205,7 @@ TCOM *table_com_reload_data(TCOM* tc, const char *condition) {
 TCOM *table_com_destroy(TCOM* tc) {
     TCOM  *next, *last_has, *has;
 
-    if(tc == (char*)0 || !_get_tc_flag_attr(tc, "group")) {
+    if(tc == (TCOM*)0 || !_get_tc_flag_attr(tc, "group")) {
         return tc;
     }
 
@@ -251,9 +252,10 @@ TCOM *table_com_destroy(TCOM* tc) {
 
 
 RCOM *table_com_to_row_com(TCOM *tc) {
-    if(tc == (TCOM*)0 ) {
-       return tc;
-    }
+    _CHECK_PARAMS_RET(
+        tc != (TCOM*)0,
+        (TCOM*)0
+    )
 
     tc->query_num = 1;
     _set_tc_flag_attr(tc, "group");         /* group leader */
@@ -264,6 +266,11 @@ RCOM *table_com_to_row_com(TCOM *tc) {
 TCOM *table_com_show_data(TCOM* tc) {
     TCOM *more_tc = tc;
 
+    _CHECK_PARAMS_RET(
+        tc != (TCOM*)0,
+        (TCOM*)0
+    )
+
     for(; more_tc != (TCOM*)0; more_tc = more_tc->next) {
         row_com_show_data(more_tc);
     }
@@ -273,6 +280,11 @@ TCOM *table_com_show_data(TCOM* tc) {
 /* the return value of the bellow functions should not be freed */
 TCOM *table_com_find(TCOM *tc, table_com_satisfy satisfy) {
     TCOM *row;
+
+    _CHECK_PARAMS_RET(
+        tc != (TCOM*)0,
+        (TCOM*)0
+    )
 
     for(row = tc; row != (TCOM*)0; row = row->next) {
         if(satisfy(row)) {
@@ -286,6 +298,11 @@ TCOM *table_com_find(TCOM *tc, table_com_satisfy satisfy) {
 TCOM *table_com_each_do(TCOM *tc, table_com_proccess proccess) {
     TCOM *row;
 
+    _CHECK_PARAMS_RET(
+        tc != (TCOM*)0,
+        (TCOM*)0
+    )
+
     for(row = tc; row != (TCOM*)0; row = row->next) {
         proccess(row);
     }
@@ -294,28 +311,32 @@ TCOM *table_com_each_do(TCOM *tc, table_com_proccess proccess) {
 }
 
 TCOM *row_com_show_data(TCOM* tc) {
-    if(tc == (TCOM*)0) {
-        return (TCOM*)0;
-    }
+
+    _CHECK_PARAMS_RET(
+        tc != (TCOM*)0,
+        (TCOM*)0
+    )
+
     table_rows_show(tc->ti->name, tc->record, 1);
     return tc;
 }
 
 /* reload current row only */
 TCOM *row_com_reload_data(TCOM* tc) {
-    INT32 status = PR_OK, query_num = 1;
+    INT32 status = 0, query_num = 1;
     char  condition[32] = {0};
     void  *reload;
 
-    if(tc == (TCOM*)0 || tc->record == (char*)0) {
-        return tc;
-    }
+    _CHECK_PARAMS_RET(
+        tc != (TCOM*)0 && tc->record != (char*)0,
+        tc
+    )
 
     snprintf(condition, 32, "where id = %d", *(UINT32*)tc->record);
 
     _set_tc_flag_error(tc, "query");
     status = find_rows_with_cond_with_ti(tc->ti, condition, &reload, &query_num);
-    if(status != PR_OK) {
+    if(status != 0) {
         return tc;
     }
     _clr_tc_flag_error(tc, "query");
@@ -335,8 +356,13 @@ TCOM *row_com_reload_data(TCOM* tc) {
 
 /* save current row only, update data in the database */
 TCOM *row_com_save_data(TCOM* tc) {
-    if(0 != row_save(tc->ti, tc->record) )
-    {
+
+    _CHECK_PARAMS_RET(
+        tc != (TCOM*)0 && tc->record != (char*)0,
+        tc
+    )
+
+    if(0 != row_save(tc->ti, tc->record) ) {
         _set_tc_flag_error(tc, "save");
     }
     return tc;
@@ -344,8 +370,13 @@ TCOM *row_com_save_data(TCOM* tc) {
 
 /* insert current row only, insert data into database */
 TCOM *row_com_insert_data(TCOM* tc) {
-    if(0 != row_insert(tc->ti, tc->record) )
-    {
+
+    _CHECK_PARAMS_RET(
+        tc != (TCOM*)0 && tc->record != (char*)0,
+        tc
+    )
+
+    if(0 != row_insert(tc->ti, tc->record) ) {
         _set_tc_flag_error(tc, "insert");
     }
     return tc;
@@ -354,9 +385,10 @@ TCOM *row_com_insert_data(TCOM* tc) {
 TCOM *row_com_find_or_create_has(TCOM* tc, const char *table_name) {
     TCOM *has;
 
-    if(tc == (TCOM*)0 || table_name == (char*)0) {
-        return (TCOM*)0;
-    }
+    _CHECK_PARAMS_RET(
+        tc != (TCOM*)0 && table_name != (char*)0,
+        (TCOM*)0
+    )
 
     for(has = tc->has; has != (TCOM*)0; has = has->has_next) {
         if(0 == strcmp(has->ti->name, table_name)) {
@@ -383,9 +415,10 @@ TCOM *row_com_find_or_create_has(TCOM* tc, const char *table_name) {
 TCOM *row_com_has_table_com(TCOM* tc, const char *table_name, const char *condition) {
     TCOM  *has   = (TCOM*)0;
 
-    if(tc == (TCOM*)0 || tc->record == (char*)0) {
-        return tc;
-    }
+    _CHECK_PARAMS_RET(
+        tc != (TCOM*)0 && tc->record != (char*)0,
+        (TCOM*)0
+    )
 
     has = row_com_find_or_create_has(tc, table_name);
     _CHECK_RET(has != (TCOM*)0, (TCOM*)0);

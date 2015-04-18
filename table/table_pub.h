@@ -69,7 +69,7 @@ void table_info_show(TI *ti);
 void tables_show();
 int  table_rows_show(const char *name, const void *rows, int num);
 _TRY_ int table_rows_release(const char *name, void *rows, int num);
-
+_TRY_ int table_rows_release_by_ti(TI *ti, void *rows, int num);
 /* *********************************************************************************
  * function: parse_field_type_name
  * return the string name of the field type

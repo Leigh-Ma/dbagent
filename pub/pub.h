@@ -2,6 +2,9 @@
 #define _AGT_PUB_H_
 #include <assert.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <memory.h>
+#include <string.h>
 
 #define logger  printf
 #define debuger printf
@@ -40,6 +43,6 @@
 
 #include "pub_types.h"
 #include "pub_flags.h"
-
+#include "pub_errors.h"
 
 #endif

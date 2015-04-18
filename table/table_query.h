@@ -6,14 +6,14 @@
 
 #define _get_ti_by_tname(name, ti)                                          \
     ti = query_get_table_info_by_name(name);                                \
-    _CHECK_RET(ti != (TI*)0, PR_ERR_TABLE);                                 \
-    _CHECK_RET(ti->bad_fnames == 1 || ti->bad_fnames == 0, PR_ERR_FLEN );   \
+    _CHECK_RET(ti != (TI*)0, ERR_TBL_NAME);                                 \
+    _CHECK_RET(ti->bad_fnames == 1 || ti->bad_fnames == 0, ERR_FLD_SQL );   \
 
 
 #define _get_ti_by_tno(tno, ti)                                             \
     ti = query_get_table_info_by_tno(tno);                                  \
-    _CHECK_RET(ti != (TI*)0, PR_ERR_TABLE);                                 \
-    _CHECK_RET(ti->bad_fnames == 1 || ti->bad_fnames == 0, PR_ERR_FLEN );   \
+    _CHECK_RET(ti != (TI*)0, ERR_TBL_NO);                                   \
+    _CHECK_RET(ti->bad_fnames == 1 || ti->bad_fnames == 0, ERR_FLD_SQL );   \
 
 
 #define FIND(table, id, pprows, pnum, status)                               \

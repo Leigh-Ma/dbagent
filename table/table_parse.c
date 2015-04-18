@@ -26,9 +26,10 @@ const int g_field_type_num = sizeof(g_type_name_map)/sizeof(g_type_name_map[0]);
 int parse_field_from_str(const TF *f, const char *p, int len, char *buff) {
     int field_len = 0;
 
-    if(len < f->size) {
-        return _parse_result(PR_ERR_RLEN);
-    }
+    _CHECK_PARAMS_RET(
+        len >= f->size,
+        ERR_FLD_LEN
+    )
 
     _parse_begin(f)
         _parse_try(INT8,    f, p,         buff,  &field_len);
@@ -50,40 +51,41 @@ int parse_field_from_str(const TF *f, const char *p, int len, char *buff) {
         _parse_try(UINT64,  f, p,         buff,  &field_len)
     _parse_end
 
-    return PR_OK;
+    return 0;
 }
 
 int parse_row_from_str(const char *row, const TF *tfs, int tfn, int len, char *record, char **tail) {
-    int  r_len = 0, i = -1, ret = PR_OK;
+    int  r_len = 0, i = -1, ret = 0;
     char *p = row, *r = (char*)record;
     TF   *f = tfs;
 
-    if(p == (char*)0 || f == (TF*)0 || tfn == 0 ){
-        return _parse_result(PR_ERR_PARAM);
-    }
+    _CHECK_PARAMS_RET(
+        p && f && tfn != 0,
+        ERR_PARAM
+    )
 
     while(i < tfn && (char *)0 != (p = strchr(p, _SPI_))) {
         p++;
         if(i == -1 ) {
             if (tfn != atoi(p)) {
-                return _parse_result(PR_ERR_FLEN);
+                return ERR_FLD_LEN;
             }
             i++;
             continue;
         }
-        if(PR_OK != (ret = parse_field_from_str(f, p, len-r_len, r + r_len))) {
-            return _parse_result(ret);
+        if(0 != (ret = parse_field_from_str(f, p, len-r_len, r + r_len))) {
+            return ret;
         }
         r_len += f->size;
         f++, i++;
     }
 
     if(i != tfn) {
-        return _parse_result(PR_ERR_DATA);
+        return ERR_TBL_DATA;
     }
 
     *tail = strchr(p, _SPI_);
-    return PR_OK;
+    return 0;
 }
 
 

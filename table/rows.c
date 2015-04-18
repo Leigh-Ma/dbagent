@@ -1,14 +1,15 @@
 #include "table_pub.h"
 
-int row_save(TI *ti, void *row) {
+INT32 row_save(TI *ti, void *row) {
     char   buff[ROW_SQL_BUFF_LEN] = {0};
     INT32  i, len = 0;  /* @i, @len, @buff are used in macros, do not modify */
     TF     *tf;
     void   *p;
 
-    if(ti == (TI*)0 || row == (void*)0) {
-        return -1;
-    }
+    _CHECK_PARAMS_RET(
+        ti != (TI*)0 && row != (void*)0,
+        ERR_PARAM
+    )
 
     len += snprintf(buff + len, ROW_SQL_BUFF_LEN - len, "update %s set ", ti->name);
     for(i = 1, tf = &ti->tfs[1]; i< ti->tfn; i++, tf++) {
@@ -32,21 +33,22 @@ int row_save(TI *ti, void *row) {
             _save_try(UINT64,  tf, p,  "%llu")
         _save_end(tf)
     }
-    len += snprintf(buff + len, ROW_SQL_BUFF_LEN - len, "where id = %u\n", *(UINT32*)row);
+    len += snprintf(buff + len, ROW_SQL_BUFF_LEN - len, "where id = %u;\n", *(UINT32*)row);
     printf(buff);
 
     return 0;
 }
 
-int row_show(TI *ti, void *row) {
+INT32 row_show(TI *ti, void *row) {
     char buff[ROW_SQL_BUFF_LEN] = {0};
     INT32  i, len = 0;  /* @i, @len, @buff are used in macros, do not modify */
     TF     *tf;
     void  *p;
 
-    if(ti == (TI*)0 || row == (void*)0) {
-        return -1;
-    }
+    _CHECK_PARAMS_RET(
+        ti != (TI*)0 && row != (void*)0,
+        ERR_PARAM
+    )
 
     len += snprintf(buff + len, ROW_SQL_BUFF_LEN - len, "<%s: { ", ti->name_ex);
     for(i = 0, tf = ti->tfs; i < ti->tfn; tf++, i++) {
@@ -76,15 +78,16 @@ int row_show(TI *ti, void *row) {
     return 0;
 }
 
-int row_insert(TI *ti, void *row) {
+INT32 row_insert(TI *ti, void *row) {
     char   buff[ROW_SQL_BUFF_LEN] = {0};
     INT32  i, len = 0;  /* @i, @len, @buff are used in macros, do not modify */
     TF     *tf;
     void   *p;
 
-    if(ti == (TI*)0 || row == (void*)0) {
-        return -1;
-    }
+    _CHECK_PARAMS_RET(
+        ti != (TI*)0 && row != (void*)0,
+        ERR_PARAM
+    )
 
     if(ti->bad_fnames) {
         len += snprintf(buff + len, ROW_SQL_BUFF_LEN - len, "insert into %s(%s) values (", ti->name, ti->far_names);
@@ -112,7 +115,7 @@ int row_insert(TI *ti, void *row) {
             _insert_try(UINT64,  tf, p,  "%llu")
         _insert_end(tf)
     }
-    snprintf(buff + len, ROW_SQL_BUFF_LEN - len, ")\n");
+    snprintf(buff + len, ROW_SQL_BUFF_LEN - len, ");\n");
     printf(buff);
 
     return 0;

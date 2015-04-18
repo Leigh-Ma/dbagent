@@ -4,7 +4,10 @@
 const TI *query_get_table_info_by_name(const char *table_name) {
     int i = TNO_MINIMUM;
 
-    _CHECK_RET_EX((const char *)0 != table_name, (TI*)0, "query: table name should not be null");
+    _CHECK_PARAMS_RET(
+         (const char *)0 != table_name,
+         (TI*)0
+    )
 
     for(; i <= TNO_MAXIMUM; i++) {
         if( 0 == strncmp(table_name, g_all_tables_info[i]->name, sizeof(g_all_tables_info[i]->name)) ||
@@ -19,7 +22,10 @@ const TI *query_get_table_info_by_name(const char *table_name) {
 
 
 const TI *query_get_table_info_by_tno(const int tno) {
-    _CHECK_RET_EX(TNO_MINIMUM <= tno && TNO_MAXIMUM >= tno, (TI*)0, "query: table no. not in valid range");
+    _CHECK_PARAMS_RET(
+        TNO_MINIMUM <= tno && TNO_MAXIMUM >= tno,
+        (TI*)0
+    )
 
     return g_all_tables_info[tno];
 }
@@ -30,7 +36,10 @@ int find_rows_with_cond_with_tname(const char *table_name, const char *condition
 
     TI *ti;
 
-    _CHECK_RET(table_name && rows, PR_ERR_PARAM);
+    _CHECK_PARAMS_RET(
+        table_name && rows,
+        ERR_PARAM
+    )
 
     _get_ti_by_tname(table_name, ti);
 
@@ -41,7 +50,10 @@ int find_rows_with_cond_with_tname(const char *table_name, const char *condition
 int find_rows_with_cond_with_tno(const int tno, const char *condition_with_where , _FREE_ void **rows, int *num) {
     TI *ti;
 
-    _CHECK_RET(num != (int *)0 && rows != (void **)0, PR_ERR_PARAM);
+    _CHECK_PARAMS_RET(
+         num != (int *)0 && rows != (void **)0,
+         ERR_PARAM
+    )
 
     _get_ti_by_tno(tno, ti);
 
@@ -51,7 +63,10 @@ int find_rows_with_cond_with_tno(const int tno, const char *condition_with_where
 int find_all_with_cond_with_tno  (const int  tno,         const char *condition_with_where , _FREE_ void **rows, int *num) {
     TI *ti;
 
-    _CHECK_RET(num != (int *)0 && rows != (void **)0, PR_ERR_PARAM);
+    _CHECK_PARAMS_RET(
+        num != (int *)0 && rows != (void **)0,
+        ERR_PARAM
+    )
 
     *num = 0;
     _get_ti_by_tno(tno, ti);
@@ -62,7 +77,10 @@ int find_all_with_cond_with_tno  (const int  tno,         const char *condition_
 int find_all_with_cond_with_tname(const char *table_name, const char *condition_with_where , _FREE_ void **rows, int *num) {
     TI *ti;
 
-    _CHECK_RET(num != (int *)0 && rows != (void **)0, PR_ERR_PARAM);
+    _CHECK_PARAMS_RET(
+        num != (int *)0 && rows != (void **)0,
+        ERR_PARAM
+    );
 
     *num = 0;
     _get_ti_by_tname(table_name, ti);
@@ -73,7 +91,10 @@ int find_all_with_cond_with_tname(const char *table_name, const char *condition_
 int find_with_cond_with_tno  (const int  tno,         const char *condition_with_where , _FREE_ void **rows, int *num) {
     TI *ti;
 
-    _CHECK_RET(num != (int *)0 && rows != (void **)0, PR_ERR_PARAM);
+    _CHECK_PARAMS_RET(
+        num != (int *)0 && rows != (void **)0,
+        ERR_PARAM
+    );
 
     *num = 0;
     _get_ti_by_tno(tno, ti);
@@ -84,7 +105,10 @@ int find_with_cond_with_tno  (const int  tno,         const char *condition_with
 int find_with_cond_with_tname(const char *table_name, const char *condition_with_where , _FREE_ void **rows, int *num) {
     TI *ti;
 
-    _CHECK_RET(num != (int *)0 && rows != (void **)0, PR_ERR_PARAM);
+    _CHECK_PARAMS_RET(
+        num != (int *)0 && rows != (void **)0,
+        ERR_PARAM
+    )
 
     *num = 0;
     _get_ti_by_tname(table_name, ti);
@@ -98,9 +122,12 @@ int find_rows_with_cond_with_ti(const TI *ti, const char *condition_with_where ,
     char *condition = condition_with_where ? condition_with_where : condition_ex;
     char sql[QUERY_MAX_SQL_LEN] = {0};;
     char *head, *tail, *raw, *p = (char*)0;
-    int row_num = 0, buff_size, status = PR_OK;
+    int row_num = 0, buff_size, status = 0;
 
-    _CHECK_RET(ti != (TI*)0 && num != (int *)0 && rows != (void **)0, PR_ERR_PARAM);
+    _CHECK_PARAMS_RET(
+        ti != (TI*)0 && num != (int *)0 && rows != (void **)0,
+        ERR_PARAM
+    )
 
     p = ti->bad_fnames == 0 ? ti->field_names : ti->far_names;
     if(*num <= 0) {
@@ -109,7 +136,11 @@ int find_rows_with_cond_with_ti(const TI *ti, const char *condition_with_where ,
         snprintf(sql, QUERY_MAX_SQL_LEN, "select  %s from `%s` %s limit %d;", p, ti->name, condition, *num);
     }
 
-    _CHECK_RET_EX(sql[QUERY_MAX_SQL_LEN-2] == '\0', PR_ERR_SLEN, sql);
+    _CHECK_RET_EX(
+        sql[QUERY_MAX_SQL_LEN-2] == '\0',
+        ERR_SQL_LEN,
+        sql
+    )
 
     do_query(sql, &head, num);
     row_num = *num;
@@ -126,18 +157,18 @@ int find_rows_with_cond_with_ti(const TI *ti, const char *condition_with_where ,
     *rows = malloc(buff_size);
     raw = (char*)*rows;
     if(raw == (char*) 0) {
-        status = PR_ERR_MEM;
+        status = ERR_SYS_MEM;
     }
     /* begin to parse result from string representation */
 
-    while( (status == PR_OK) && (head != (char*)0) && (0 < row_num--) ) {
+    while( (status == 0) && (head != (char*)0) && (0 < row_num--) ) {
         status = parse_row_from_str(head, ti->tfs, ti->tfn, buff_size, raw, &tail);
         buff_size -= ti->row_size;
         raw  += ti->row_size;
         head = tail;
     }
 
-    if(status != PR_OK) {
+    if(status != 0) {
         if(*rows) {
             free(*rows);
             *rows = (void*)0;

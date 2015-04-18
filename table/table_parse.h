@@ -1,42 +1,8 @@
 #ifndef _TABLE_PARSE_H_
 #define _TABLE_PARSE_H_
 
-/* malloc memory error     */
-#define PR_ERR_MEM          -1
-
-/* all right               */
-#define PR_OK               0
-
-/* params error            */
-#define PR_ERR_PARAM        1
-
-/* field num error         */
-#define PR_ERR_FNUM         2
-
-/* field data length error */
-#define PR_ERR_FLEN         3
-
- /* row data length error   */
-#define PR_ERR_RLEN         4
-
-/* data error               */
-#define PR_ERR_DATA         5
-
-/* field type error */
-#define PR_ERR_FTYPE        6
-
-/* table info not found     */
-#define PR_ERR_TABLE        7
-
-/* SQL length too long      */
-#define PR_ERR_SLEN         8
-
 #define _SPI_                           '|'         /* filed value split identifier*/
-#define _parse_result(val)              printf("%s, parse result: %s(%d)\n",__FUNCTION__, #val, val), val
-#define _parse_result_ex(val, msg)      val
 
-#define _parse_warning(val)             val
-#define _parse_warning_ex(val, msg)     msg, val
 
 
 #define _parse_begin(f)                             \
@@ -49,7 +15,7 @@
 
 #define _parse_end                                  \
     default:                                        \
-        return _parse_result(PR_ERR_FTYPE);         \
+        return ERR_FLD_TYPE;                        \
     }
 
 #define _declare_parse_as_ints(category, digits)                            \

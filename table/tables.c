@@ -3,7 +3,7 @@
 TI      *g_all_tables_info[TNO_MAXIMUM+1]   = {0};
 char    g_is_big_endian = 0;
 
-static int table_info_init(TI *ti, TF *tfs, int num);
+static INT32 table_info_init(TI *ti, TF *tfs, INT32 num);
 
 _INIT_ void tables_init(){
      short _short = 0x0102;
@@ -13,13 +13,13 @@ _INIT_ void tables_init(){
     #include "table_info_init.inc"
 }
 
-_TRY_ int table_rows_release_by_name(const char *name, void *rows, int num) {
+_TRY_ INT32 table_rows_release_by_name(const char *name, void *rows, INT32 num) {
     char *p = (char*)rows, *q = (char*)rows;
-    int i, j;
+    INT32 i, j;
     TI *ti;
     TF *tf;
 
-    _CHECK_RET(name && rows, PR_ERR_PARAM);
+    _CHECK_RET(name && rows, ERR_PARAM);
 
     _get_ti_by_tname(name, ti);
 
@@ -34,15 +34,15 @@ _TRY_ int table_rows_release_by_name(const char *name, void *rows, int num) {
         }
     }
     free(rows);
-    return PR_OK;
+    return 0;
 }
 
-_TRY_ int table_rows_release_by_ti(TI *ti, void *rows, int num) {
+_TRY_ INT32 table_rows_release_by_ti(TI *ti, void *rows, INT32 num) {
     char *p = (char*)rows, *q = (char*)rows;
-    int i, j;
+    INT32 i, j;
     TF *tf;
 
-    _CHECK_RET(ti && rows, PR_ERR_PARAM);
+    _CHECK_RET(ti && rows, ERR_PARAM);
 
     for(j = 0, tf = ti->tfs; j < ti->tfn; j++, tf++) {
         if(FT_SHOULD_FREE(tf->type)) {
@@ -55,22 +55,22 @@ _TRY_ int table_rows_release_by_ti(TI *ti, void *rows, int num) {
         }
     }
     free(rows);
-    return PR_OK;
+    return 0;
 }
 
 void tables_show() {
-    int i = TNO_MINIMUM;
+    INT32 i = TNO_MINIMUM;
     for(; i <= TNO_MAXIMUM; i++) {
         table_info_show(table_info_of_tno(i));
     }
 }
 
 
-int table_rows_show(const char *name, const void *rows, int num) {
-    int i;
+INT32 table_rows_show(const char *name, const void *rows, INT32 num) {
+    INT32 i;
     TI *ti;
 
-    _CHECK_RET(name && rows, PR_ERR_PARAM);
+    _CHECK_RET(name && rows, ERR_PARAM);
 
     _get_ti_by_tname(name, ti);
 
@@ -78,12 +78,12 @@ int table_rows_show(const char *name, const void *rows, int num) {
         row_show(ti, (void*)((char*)rows + i*ti->row_size));
     }
 
-    return PR_OK;
+    return 0;
 }
 
 void table_info_show(TI *ti) {
     TF *tf = (TI *)0;
-    int i = 1;
+    INT32 i = 1;
 
     if(!ti) {
         return;
@@ -106,7 +106,7 @@ void table_info_show(TI *ti) {
     printf("); /* @%s */\n\n", ti->name_ex);
 }
 
-static void table_field_init(TF *tfs, int num) {
+static void table_field_init(TF *tfs, INT32 num) {
     INT32   offset, i;
     TF      *f = tfs;
 
@@ -121,9 +121,9 @@ static void table_field_init(TF *tfs, int num) {
     return;
 }
 
-static int table_info_init(TI *ti, TF *tfs, int num) {
+static INT32 table_info_init(TI *ti, TF *tfs, INT32 num) {
     TF *f = tfs;
-    int i = 0, field_name_len = 0, max_len = FIELD_NAME_LEN_MAX;
+    INT32 i = 0, field_name_len = 0, max_len = FIELD_NAME_LEN_MAX;
     char *p;
 
     assert(ti && tfs);

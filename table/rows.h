@@ -9,7 +9,7 @@
 #define _save_end(tf)                                           \
     default:                                                    \
         len += snprintf(buff + len, ROW_SQL_BUFF_LEN - len, "%s = *error* \n", (tf)->name);                  \
-        return PR_ERR_FTYPE;                                    \
+        return ERR_FLD_TYPE;                                    \
     }
 
 #define _save_try(type, tf, p, fmt)                             \
@@ -90,7 +90,7 @@
 #define _insert_end(tf)                                         \
     default:                                                    \
         len += snprintf(buff + len, ROW_SQL_BUFF_LEN - len, "%s = *error* \n", (tf)->name);                  \
-        return PR_ERR_FTYPE;                                    \
+        return ERR_FLD_TYPE;                                    \
     }
 
 #define _insert_try(type, tf, p, fmt)                           \
