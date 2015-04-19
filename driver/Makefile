@@ -1,17 +1,17 @@
-TARGET =
-LIB_OBJ = lib_agt_driver.a
+TARGET = driver_dbg
+LIB_OBJ = #lib_agt_driver.a
 
 LIB_DIR = ../libs/
 CP = cp -rf
 AR = ar rc
 CC = gcc
 CPPFLAGS =
-LDFLAGS = 
+LDFLAGS = -L/usr/local/mysql/lib/ -L$(LIB_DIR)
 CFLAGS = -Wall -g
 COMPILE = $(CC) $(CPPFLAGS) $(CFLAGS) -c
 LINKCC = $(CC) $(LDFLAGS)
 
-LIBA =
+LIBA = -lmysqlclient -l_agt_utils
 SRCS := $(wildcard *.c */*.c)
 OBJS := $(patsubst %.c,%.o,$(SRCS))
 
@@ -28,7 +28,7 @@ $(LIB_OBJ):$(OBJS)
 
 .PHONY:clean
 clean:
-	rm -f $(OBJS) $(TARGET)
+	rm -f $(OBJS) $(TARGET) $(LIB_OBJ)
 
 explain:
 	@echo "The information represents in the program:"

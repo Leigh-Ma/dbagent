@@ -1,5 +1,5 @@
 #include "driver.h"
-INT32 do_init(DB_DR *hdr, DB_CFG *cfg) {
+INT32 dr_init(DB_DR *hdr, DB_CFG *cfg) {
     if(hdr == (DB_DR *)0) {
        return -1;
     }
@@ -7,7 +7,7 @@ INT32 do_init(DB_DR *hdr, DB_CFG *cfg) {
     return hdr->opr->dr_init(hdr, cfg);
 }
 
-DB_CON *do_new_connector(DB_DR *hdr) {
+DB_CON *dr_new_connector(DB_DR *hdr) {
     void    *db_con = (void*)0;
     DB_CON  *hdc = (DB_CON*)0;
 
@@ -32,7 +32,8 @@ DB_CON *do_new_connector(DB_DR *hdr) {
         free(hdc);
         return (DB_CON*)0;
     }
-
+    hdc->con = db_con;
+    hdc->driver = hdr;
     dr_lock(hdr);
     hdc->next = hdr->connections;
     hdr->connections = hdc;
@@ -42,7 +43,7 @@ DB_CON *do_new_connector(DB_DR *hdr) {
     return hdc;
 }
 
-INT32 do_connect(DB_CON *hdc) {
+INT32 co_connect(DB_CON *hdc) {
     INT32   status;
 
     if(hdc == (DB_CON*)0) {
@@ -59,7 +60,24 @@ INT32 do_connect(DB_CON *hdc) {
     return status;
 }
 
-INT32 do_close(DB_CON *hdc) {
+INT32 co_query(DB_CON* hdc, DB_REQ *req, DB_RESP *resp) {
+    INT32   status;
+
+    if(hdc == (DB_CON*)0) {
+        return -1;
+    }
+
+    status = hdc->driver->opr->co_query(hdc, req, resp);
+    if(0 == status) {
+        dr_lock(hdc->driver);
+        hdc->driver->linked += 1;
+        dr_unlock(hdc->driver);
+    }
+
+    return status;
+}
+
+INT32 co_close(DB_CON *hdc) {
     DB_DR   *hdr;
     DB_CON  *n, *m;
 
@@ -84,28 +102,28 @@ INT32 do_close(DB_CON *hdc) {
     return 0;
 }
 
-INT32 do_transaction(DB_CON *hdc) {
+INT32 co_transaction(DB_CON *hdc) {
     if(hdc == (DB_CON*)0) {
         return -1;
     }
     return hdc->driver->opr->co_tran_begin(hdc);
 }
 
-INT32 do_commit(DB_CON *hdc) {
+INT32 co_commit(DB_CON *hdc) {
     if(hdc == (DB_CON*)0) {
         return -1;
     }
     return hdc->driver->opr->co_tran_commit(hdc);
 }
 
-INT32 do_rollback(DB_CON *hdc) {
+INT32 co_rollback(DB_CON *hdc) {
     if(hdc == (DB_CON*)0) {
         return -1;
     }
     return hdc->driver->opr->co_tran_rollback(hdc);
 }
 
-INT32 do_destroy(DB_DR *hdr) {
+INT32 dr_destroy(DB_DR *hdr) {
     if(hdr == (DB_DR*)0) {
         return -1;
     }

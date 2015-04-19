@@ -30,7 +30,7 @@ const static DB_OPR mysql_opr = {
         my_dr_destroy,
 };
 
-const DB_DR agt_mysql_driver = {"mysql", &mysql_opr, };
+DB_DR agt_mysql_driver = {"mysql", &mysql_opr, };
 
 
 static INT32 my_dr_init(DB_DR  *hdr, DB_CFG *cfg) {
@@ -66,6 +66,7 @@ static INT32 my_co_connect(DB_CON *hdc) {
     cfg = &hdc->driver->cfg;
     if(!mysql_real_connect(hdc->con, cfg->host, cfg->user, cfg->password,
             cfg->db, cfg->port, (const char *)0, 0)) {
+        printf("MYSQL error: %s.\n", mysql_error(hdc->con));
         return ERR_DR_CONNECT;
     }
     return 0;
@@ -73,6 +74,7 @@ static INT32 my_co_connect(DB_CON *hdc) {
 
 static INT32 my_co_query(DB_CON* hdc, DB_REQ *req, DB_RESP *resp) {
     INT32 row_num = 0, field_num, status;
+    DIOB *iob = (DIOB*)0;
     MYSQL_RES *res;
     MYSQL_ROW row;
 
@@ -80,21 +82,24 @@ static INT32 my_co_query(DB_CON* hdc, DB_REQ *req, DB_RESP *resp) {
         logger("Execute Query error");
         return ERR_DR_QUERY;
     }
-
+    reset_db_response(hdc, resp, iob);
     if((MYSQL_RES *)0 == (res = mysql_store_result((MYSQL *)hdc->con))) {
         logger("Store Query Result error");
         return ERR_DR_RESULT;
     }
 
     iob_release(hdc->iob);
-    while( (MYSQL_ROW)0 == (row = mysql_fetch_row(res)) ){
+    while( (MYSQL_ROW)0 != (row = mysql_fetch_row(res)) ){
         field_num = mysql_num_fields(res);
-        status = iob_cache(hdc->iob, (void **)row, field_num, IOBF_CACHE_STRS, &iob_vertical_cb);
+        status = iob_cache(iob, (void *)row, field_num, IOBF_CACHE_STRS, &iob_vertical_cb);
         if(status != 0) {
+            printf("iob_cache error %d\n", status);
             break;
         }
         row_num++;
     }
+    set_db_response(resp, iob, row_num);
+
     mysql_free_result(res);
 
     return status;

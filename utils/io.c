@@ -8,7 +8,7 @@ DIOB *iob_alloc_b(INT32 block, INT32 size) {
         return iob;
     }
 
-    iob = (DIOB*) malloc(sizeof(DIOB));
+    iob = (DIOB*)malloc(sizeof(DIOB));
     if(iob == (DIOB*)0) {
         return iob;
     }
@@ -95,8 +95,8 @@ DIOB *iob_release(DIOB* iob) {
     for(i = 0; i < iob->iov_num; i++) {
         iob->iovs[i].iov_len = 0;
     }
-    iob->flag = 0;
-    iob->iov_index = 0;
+    iob->flag       = 0;
+    iob->iov_index  = 0;
     iob->iov_offset = 0;
 
     return iob;
@@ -123,7 +123,7 @@ static INT32 iob_enlarge(DIOB *iob, INT32 bytes) {
         new_num = iob->iov_num + 4 * (((IOV_BLOCK_SIZE + bytes)/IOV_BLOCK_SIZE + 4)/4);
     }
     new_size = new_num * (sizeof(struct iovec) + iob->iov_len );
-    new_base =(char*) malloc(new_size);
+    new_base = (char*)malloc(new_size);
     if(new_base == (char*)0) {
         return ERR_SYS_MEM;
     }
@@ -151,7 +151,9 @@ static INT32 iob_enlarge(DIOB *iob, INT32 bytes) {
 static INT32 iob_cache_block(DIOB *iob, void *block, INT32 size, UINT32 flag, DIOB_CB *cb) {
     INT32 available = 0, offset, start, iov_offset;
 
-    if(size < 0) {
+    if(block == (void*)0) {
+        size = 0;
+    } else if (size < 0) {
         size = strlen((char*)block);
     }
 
@@ -163,7 +165,7 @@ static INT32 iob_cache_block(DIOB *iob, void *block, INT32 size, UINT32 flag, DI
         iov_offset = 0;
     }
 
-    offset = start * iob->iov_len + iov_offset;
+    offset    = start * iob->iov_len + iov_offset;
     available = iob->size - offset;
 
     if(cb && cb->iob_cb) {
@@ -172,7 +174,7 @@ static INT32 iob_cache_block(DIOB *iob, void *block, INT32 size, UINT32 flag, DI
                 return ERR_SYS_MEM;
             }
         }
-        offset += cb->iob_cb(iob->base + offset, cb->param, cb->param_size);
+        offset += cb->iob_cb(iob->base + offset, cb->param, cb->param_size, 0);
     } else {
         if (size >= available) {
            if(iob_enlarge(iob, 1 + size - available)) {
@@ -188,7 +190,7 @@ static INT32 iob_cache_block(DIOB *iob, void *block, INT32 size, UINT32 flag, DI
         offset += size;
     }
 
-    iob->iov_index = offset/iob->iov_len;
+    iob->iov_index  = offset / iob->iov_len;
     iob->iov_offset = offset % iob->iov_len;
 
     for(; start < iob->iov_index; start++) {
@@ -214,12 +216,17 @@ static INT32 iob_cache_strings(DIOB *iob, char **str, INT32 size, UINT32 flag, D
     }
 
     if(cb && cb->iob_cb) {
+        cb_prepend = 1;         /* should call cb->iob_cb*/
         len += size * cb_prepend;
     }
 
     for(i = 0, len = 0; i < size; i++) {
-        str_lens[i] = strlen(str[i]);
-        len += str_lens[i];
+        if(str[i]) {
+            str_lens[i] = strlen(str[i]);
+            len += str_lens[i];
+        } else {
+            str_lens[i] = 0;
+        }
     }
 
     start = iob->iov_index;
@@ -229,7 +236,7 @@ static INT32 iob_cache_strings(DIOB *iob, char **str, INT32 size, UINT32 flag, D
         iov_offset = 0;
     }
 
-    offset = start * iob->iov_len + iov_offset;
+    offset    = start * iob->iov_len + iov_offset;
     available = iob->size - offset;
 
     if(len >= available) {
@@ -241,9 +248,9 @@ static INT32 iob_cache_strings(DIOB *iob, char **str, INT32 size, UINT32 flag, D
     iob->iov_offset = iov_offset;
     buff = iob->base + offset;
 
-    for(i = 0, len = 0, buff = iob->base + offset; i < size; i++) {
+    for(i = 0, len = 0; i < size; i++) {
         if(cb_prepend > 0) {
-            buff += cb->iob_cb(buff, cb->param, cb->param_size);
+            buff += cb->iob_cb(buff, cb->param, cb->param_size, 0);
         }
         if(str_lens[i] > 0) {
             memcpy(buff, str[i], str_lens[i]);
@@ -252,7 +259,7 @@ static INT32 iob_cache_strings(DIOB *iob, char **str, INT32 size, UINT32 flag, D
     }
 
     offset = buff - iob->base;
-    iob->iov_index = offset/iob->iov_len;
+    iob->iov_index  = offset / iob->iov_len;
     iob->iov_offset = offset % iob->iov_len;
     for(; start < iob->iov_index; start++) {
         iob->iovs[start].iov_len = iob->iov_len;
@@ -265,7 +272,7 @@ static INT32 iob_cache_strings(DIOB *iob, char **str, INT32 size, UINT32 flag, D
 INT32 iob_cache(DIOB *iob, void *data, INT32 size, UINT32 flag, DIOB_CB *callback) {
     INT32 status = ERR_IOB_FLAG;
 
-    if(iob == (DIOB*)0 || data == (void*)0) {
+    if(iob == (DIOB*)0) {
         return ERR_PARAM;
     }
     if(iob->flag & IOBF_CACHE_FULL) { /* not useful when enlarge ability provided */
@@ -284,40 +291,86 @@ INT32 iob_cache(DIOB *iob, void *data, INT32 size, UINT32 flag, DIOB_CB *callbac
 }
 
 
-INT32 iob_probe(DIOB *iob) {
-    struct iovec *iov;
-    INT32 i = 0;
-    char *p, c;
+INT32 iob_proccess(DIOB *iob, DIOB_CB *cb) {
+    INT32 len = 0, shift = ERR_IOB_EMPTY;
+    INT32 last_index = -1, offset, index, remain;
+    char  *buff;
 
-    if(iob == (DIOB *)0) {
-        return ERR_PARAM;
+    _CHECK_PARAMS_RET(
+       iob != (DIOB*)0 && cb != (DIOB_CB*)0,
+       ERR_PARAM
+    )
+
+    do {
+        index  = len / iob->iov_len;
+        offset = len % iob->iov_len;
+        do {
+            if(index > iob->iov_index) {
+                return 0;
+            }
+            if(offset >= iob->iovs[index].iov_len) {
+                index += 1;
+                offset = 0;
+            } else {
+                break;
+            }
+        } while(1);
+        if(index >= iob->iov_num) {
+            return 0;
+        }
+        if(last_index != index) {
+            printf("\n processing block %d at %p----(%4d/%d)------\n",
+                    index, iob->iovs[index].iov_base, iob->iovs[index].iov_len, iob->iov_len);
+        }
+
+        last_index = index;
+        buff   = iob->base + index * iob->iov_len + offset;
+        remain = iob->iov_index * iob->iov_len + iob->iov_offset - (buff - iob->base);
+        shift  = cb->iob_cb(buff, cb->param, cb->param_size, remain);
+        len   += shift;
+    } while(shift > 0);
+
+    return shift;
+}
+
+static INT32 iob_probe_cb(char *buff, void *params, INT32 size, INT32 remain_size) {
+    INT32 len = *(INT32*)params;
+    char  cache_hex[512] = {0}, cache_str[512] = {0}, c;
+    INT32 i = 0, len_hex = 0, len_str = 0;
+
+    printf("%p\t", buff);
+    for(i = 0; i < len && i< remain_size; i++, buff++) {
+       c = *buff;
+       len_hex += snprintf(cache_hex+len_hex, 512-len_hex, "%2hhx ", c);
+       if(c == '\0' || c == '\n' || c == '\t') {
+           c = ' ';
+       }
+       len_str += snprintf(cache_str+len_str, 512-len_str, "%c", c);
     }
+    printf("%-96s;  %s\n", cache_hex, cache_str);
+    return len;
+}
 
-    printf("IOB(at: %p): {flag: %x, size: %d, iov_num: %d, iov_len: %d,"
+
+INT32 iob_probe(DIOB *iob) {
+    INT32 const_32 = 32;
+    DIOB_CB probe_cb = {iob_probe_cb, &const_32, sizeof(32)};
+
+    _CHECK_PARAMS_RET(
+        iob != (DIOB *)0,
+        ERR_PARAM;
+    )
+    printf("\nIOB(at: %p):\n\t{flag: %x, size: %d, iov_num: %d, iov_len: %d,"
             "iov_offset: %d, iov_index: %d, base: %p}\n", iob,
             iob->flag, iob->size, iob->iov_num, iob->iov_len,
             iob->iov_offset, iob->iov_index, iob->base);
 
-    for(iov = iob->iovs; i < iob->iov_num; i++, iov++) {
-        printf("------block %d (%p):-%d/%d------------------------\n",
-                i, iov->iov_base, iov->iov_len, iob->iov_len);
-        if(iov->iov_len > 0) {
-            p = (char*)iov->iov_base + iov->iov_len - 1;
-            c = *p;
-            *p = '\0';
-            printf("(%d)%s\n-----------------------------------------------\n", strlen(iov->iov_base),iov->iov_base);
-            *p = c;
-        }
-    }
-    return 0;
+    return iob_proccess(iob, &probe_cb);
 }
 
-static INT32 iob_add_pre_sperator(char *iob_buff, void *params, INT32 size) {
+static INT32 iob_add_pre_sperator(char *iob_buff, void *params, INT32 size, INT32 remain_size) {
     *iob_buff = *(char*)params;
     return 1;
 }
 
-DIOB_CB iob_vertical_cb = {iob_add_pre_sperator, "|", 1 };
-
-/* if enlarge failed, do not destroy the old */
-
+DIOB_CB iob_vertical_cb = {iob_add_pre_sperator, "|", 1};

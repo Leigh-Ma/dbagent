@@ -16,7 +16,6 @@ typedef struct db_connection {
     db_thread_t                 tid;
     DIOB                        *iob;
     INT32                       status;         /*0: disconnected, 1: connected */
-    struct db_operates          *opr;
 
     struct db_connection        *next;
 
@@ -106,5 +105,21 @@ typedef struct db_operates {
 
 }DB_OPR;
 
+extern DB_DR agt_mysql_driver;
 
+INT32 dr_init(DB_DR  *hdr, DB_CFG *cfg);
+DB_CON *dr_new_connector(DB_DR *hdr);
+INT32 co_connect(DB_CON *hdc);
+INT32 co_query(DB_CON* hdc, DB_REQ *req, DB_RESP *resp);
+INT32 co_update(DB_CON* hdc, DB_REQ *req, DB_RESP *resp);
+INT32 co_disconnect(DB_CON  *hdc);
+INT32 co_close(DB_CON  *hdc);
+INT32 co_tran_begin(DB_CON  *hdc);
+INT32 co_tran_commit(DB_CON  *hdc);
+INT32 co_tran_rollback(DB_CON  *hdc);
+INT32 dr_destroy(DB_DR  *hdr);
+
+
+
+#include "driver_macro.h"
 #endif

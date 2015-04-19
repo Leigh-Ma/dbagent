@@ -8,7 +8,7 @@
 
 /* all data is continuous as one message   */
 #define IOBF_CACHE_NEXT     0x10000000      /*
-                                             * write data to the next iovec
+                                             * write data to the next iovec, not used yet
                                              * if not set(default), append to current iovec
                                              */
 #define IOBF_CACHE_FULL     0x40000000      /* DIBO is full                                             */
@@ -39,8 +39,8 @@ typedef struct driver_io_buffer {
 }DIOB, *HDIOB;
 
 
-/* callback for each slice data write, return header lens prepend to data */
-typedef INT32 (*iob_wslice_cb)(char *iob_buff, void *params, INT32 size);
+/* callback for each slice of data, return buffer offset by callback   */
+typedef INT32 (*iob_wslice_cb)(char *buff, void *params, INT32 size, INT32 remain_size);
 
 typedef struct driver_iob_cb{
     iob_wslice_cb   iob_cb;
