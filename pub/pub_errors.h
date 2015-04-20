@@ -32,4 +32,11 @@
 #define ERR_IOB_FLAG       -802          /* error iob flag                  */
 #define ERR_IOB_EMPTY      -803          /* iob has no data at all          */
 
+#define ERR_JOB_JID        -901          /* job jid error(not found)        */
+#define ERR_JOB_MEM        -902          /* job memory error                */
+#define ERR_JOB_SCOK       -903          /* job socket pair error           */
+#define ERR_JOB_CREATE     -904          /* job create thread error         */
+
+#define ERR_JEV_BASE       -951          /* job event base init error       */
+#define ERR_JEV_ADD        -952          /* event add error                 */
 #endif

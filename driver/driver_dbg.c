@@ -30,6 +30,7 @@ int main() {
     )
 
     iob_probe(resp.iob);
+    iob_destroy(resp.iob);
 
     _CHECK_RET_EX(
        0 == co_close(hdc),
