@@ -1,11 +1,12 @@
 #ifndef _AGT_PUB_H_
 #define _AGT_PUB_H_
 #include <assert.h>
+#include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <memory.h>
 #include <string.h>
-
+#include <pthread.h>
 #define logger  printf
 #define debuger printf
 #define _FUNCTION_PARAMETER_ERROR_LOG_              \

@@ -320,7 +320,7 @@ INT32 iob_proccess(DIOB *iob, DIOB_CB *cb) {
         }
         if(last_index != index) {
             printf("\n processing block %d at %p----(%4d/%d)------\n",
-                    index, iob->iovs[index].iov_base, iob->iovs[index].iov_len, iob->iov_len);
+                    index, iob->iovs[index].iov_base, (int32_t)iob->iovs[index].iov_len, iob->iov_len);
         }
 
         last_index = index;

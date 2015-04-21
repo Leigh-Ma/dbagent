@@ -36,6 +36,9 @@
 #define ERR_JOB_MEM        -902          /* job memory error                */
 #define ERR_JOB_SCOK       -903          /* job socket pair error           */
 #define ERR_JOB_CREATE     -904          /* job create thread error         */
+#define ERR_JOB_DATA       -905          /* job data error for base entry   */
+#define ERR_JTM_PARAM      -941          /* job timer params error          */
+#define ERR_JTM_CREATE     -942          /* job timer create error          */
 
 #define ERR_JEV_BASE       -951          /* job event base init error       */
 #define ERR_JEV_ADD        -952          /* event add error                 */
