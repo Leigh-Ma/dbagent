@@ -312,7 +312,7 @@ int32_t job_settimer(int32_t timerno, uint32_t second, int32_t type) {
         return ERR_JTM_CREATE;
     }
 
-    timer->time.tv_sec  = second / 1000;
+    timer->time.tv_sec  = second;
     timer->time.tv_usec = 0;
     timer->type         = type;
     timer->timerno      = timerno;
@@ -364,13 +364,21 @@ static void dsipatch_timeout_cb(int fd, short which, void *arg) {
 }
 
 
-void job_dispatch() {
+void job_dispatch(struct event **evs, int32_t num) {
     struct timeval tv = {1, 0};
     job_t  *job = job_self();
+    int32_t i = 0;
 
     job->base = event_base_new();
+    if(evs && num > 0) {
+        for(; i < num; i++) {
+            event_add(evs[i], NULL);
+        }
+    }
+
     event_assign(&job->notify_event,job->base, -1 , 0, dsipatch_timeout_cb, &job->notify_event);
     evtimer_add(&job->notify_event, &tv);
+
     event_base_dispatch(job->base);
 }
 

@@ -3,14 +3,14 @@
 
 void job_hello(int32_t msgno, void *content, int32_t len, int32_t sender_jid);
 job_t g_jobs[] = {
-        {"job_hello",  1, job_hello },
-        {"job_hello",  2, job_hello },
-        {"job_hello",  3, job_hello },
-        {"job_hello",  4, job_hello },
-        {"job_hello",  5, job_hello },
-        {"job_hello",  6, job_hello },
-        {"job_hello",  7, job_hello },
-        {"job_hello",  8, job_hello },
+        {"job_hello", 1, 1, job_hello },
+        {"job_hello", 1, 2, job_hello },
+        {"job_hello", 1, 3, job_hello },
+        {"job_hello", 1, 4, job_hello },
+        {"job_hello", 1, 5, job_hello },
+        {"job_hello", 1, 6, job_hello },
+        {"job_hello", 1, 7, job_hello },
+        {"job_hello", 1, 8, job_hello },
 
 };
 
@@ -44,7 +44,7 @@ int main() {
     iob_destroy(cp);*/
 
     job_start_work();
-    job_dispatch();
+    job_dispatch(NULL, 0);
     return 0;
 }
 

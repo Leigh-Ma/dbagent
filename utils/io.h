@@ -29,12 +29,10 @@ typedef struct driver_io_buffer {
     INT32              iov_len;        /* iov buff size                */
     INT32              iov_num;        /* iov num                      */
 
-    pthread_mutex_t    lock;
     INT32              iov_index;      /* current processing iov index */
     INT32              iov_offset;     /* current offset in iov        */
-
-    struct iovec       *iovs;          /* use able iovec array         */
     char               *base;          /* base address of buff         */
+    struct iovec       *iovs;          /* use able iovec array         */
 
 }DIOB, *HDIOB;
 

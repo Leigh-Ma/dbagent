@@ -1,15 +1,21 @@
-#ifndef _JOBER_C_
-#define _JOBER_C_
+#ifndef _JOBER_H_
+#define _JOBER_H_
 
 #include <event.h>
 
+
 typedef struct job_msg_struct {
     int32_t                     msg_no;
+
     int32_t                     sender;
+    int32_t                     s_module;
     int32_t                     receiver;
-    struct job_msg_struct       *next;
+    int32_t                     r_module;
 
     int32_t                     msg_len;
+
+    struct job_msg_struct       *next;
+
     char                        content[1];
 }jmsg_t;
 
@@ -38,6 +44,7 @@ typedef int32_t (job_callback)(struct job_control_block*, void*, int32_t);
 
 typedef struct job_control_block{
     char                        name[32];
+    int32_t                     module;
     int32_t                     jid;            /* manually set                                 */
     job_state_machine           *state_machine;
 
@@ -66,6 +73,10 @@ typedef struct job_control_block{
     int32_t                     msg_recycle_miss;/* recycle_len too small times                 */
 #endif
 
+#ifdef     _JOB_IPC_MANAGEMENT_
+    struct  ipc_node            *node;
+#endif
+
     int32_t                     msg_num;        /* current  message count           */
     int32_t                     received_num;   /* received message count           */
     int32_t                     processed_num;  /* processed message count          */
@@ -82,13 +93,18 @@ typedef struct job_control_block{
 job_t  *job_self();
 job_t  *job_find(int32_t jid);
 int32_t job_start_work();
-void    job_dispatch();
+void    job_dispatch(struct event **evs, int32_t num);
 void    job_probe();
 #define JOB_TIMER_LOOP          1
 #define JOB_TIMER_ONCE          0
 int32_t job_settimer(int32_t timerno, uint32_t second, int32_t type);
 int32_t job_asend(int32_t recv_jid, int32_t msgno, void *content, int32_t len);
 
+#ifndef _JOB_IPC_MANAGEMENT_
 extern job_t    g_jobs[];
 extern int32_t  g_jobs_num;
+#endif
+
+
+#include "jmsg.h"
 #endif

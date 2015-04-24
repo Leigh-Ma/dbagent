@@ -9,6 +9,11 @@
 #define ERR_PARAM           -52         /* invalid parameters               */
 #define ERR_STATE           -53         /* error found for state machines   */
 
+#define ERR_SOCK_CREATE     -81         /* error create socket              */
+#define ERR_SOCK_OPT        -82         /* error set socket option          */
+#define ERR_SOCK_BIND       -83
+#define ERR_SOCK_LISTEN     -84
+
 #define ERR_FLD_NUM        -101         /* field number error               */
 #define ERR_FLD_LEN        -102         /* field data length error          */
 #define ERR_FLD_TYPE       -103         /* field type error                 */
@@ -40,6 +45,14 @@
 #define ERR_JTM_PARAM      -941          /* job timer params error          */
 #define ERR_JTM_CREATE     -942          /* job timer create error          */
 
+#define ERR_JMSG_SIZE      -951          /* message size too small          */
+
 #define ERR_JEV_BASE       -951          /* job event base init error       */
 #define ERR_JEV_ADD        -952          /* event add error                 */
+
+#define ERR_SOCK_CON       -961          /* connection state error          */
+#define ERR_SOCK_SEND      -962          /* recv data from remote peer error*/
+#define ERR_SOCK_RECV      -963          /* recv data from remote peer error*/
+
+
 #endif

@@ -68,11 +68,18 @@ INT32 co_query(DB_CON* hdc, DB_REQ *req, DB_RESP *resp) {
     }
 
     status = hdc->driver->opr->co_query(hdc, req, resp);
-    if(0 == status) {
-        dr_lock(hdc->driver);
-        hdc->driver->linked += 1;
-        dr_unlock(hdc->driver);
+
+    return status;
+}
+
+INT32 co_update(DB_CON* hdc, DB_REQ *req, DB_RESP *resp) {
+    INT32   status;
+
+    if(hdc == (DB_CON*)0) {
+        return -1;
     }
+
+    status = hdc->driver->opr->co_update(hdc, req, resp);
 
     return status;
 }
@@ -84,6 +91,7 @@ INT32 co_close(DB_CON *hdc) {
     if(hdc == (DB_CON*)0) {
         return -1;
     }
+
     hdr = hdc->driver;
 
     dr_lock(hdr);                      /* delete from connection list   */
