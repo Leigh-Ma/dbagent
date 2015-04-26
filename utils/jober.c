@@ -2,6 +2,8 @@
 #include "jober.h"
 
 static job_t g_main_job;
+extern job_t g_jobs[] ;
+extern int32_t g_jobs_num;
 
 #ifdef _JOB_RECYCLE_MSG_BUFFER_
 static jmsg_t *j_msg_recycle(job_t *job, int32_t len) {
@@ -171,7 +173,7 @@ static void job_timer_process(int fd, short which, void *arg) {
         event_del(timer->event);
         j_timer_reclaim(me, timer->timerno);
     }
-    me->state_machine(timer->timerno, NULL, 0, me->jid);
+    me->state_machine(me, NULL, timer->timerno);
     me->timer_pending--;
 }
 
@@ -186,7 +188,7 @@ static void job_event_process(int fd, short which, void *arg) {
 
     msg = j_pop_msg(me);
     if(msg) {
-        me->state_machine(msg->msg_no, msg->content, msg->msg_len, msg->sender);
+        me->state_machine(me, NULL, msg->msg_no);
         j_msg_reclaim(me, msg);
     }
 

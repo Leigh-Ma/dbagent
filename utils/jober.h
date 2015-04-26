@@ -13,6 +13,7 @@ typedef struct job_msg_struct {
     int32_t                     r_module;
 
     int32_t                     msg_len;
+    int                         link_fd;     /*to locate link*/
 
     struct job_msg_struct       *next;
 
@@ -39,7 +40,7 @@ typedef struct job_timer_events {
 
 
 
-typedef void (job_state_machine)(int32_t msgno, void *content, int32_t len, int32_t sender_jid);
+typedef void (job_state_machine)(struct job_control_block *, jmsg_t *, int32_t msgno);
 typedef int32_t (job_callback)(struct job_control_block*, void*, int32_t);
 
 typedef struct job_control_block{
@@ -66,15 +67,16 @@ typedef struct job_control_block{
     pthread_mutex_t             lock;
     jmsg_t                      *msg_queue;
     jmsg_t                      *msg_tail;
-#ifdef _JOB_RECYCLE_MSG_BUFFER_
+#ifdef  _JOB_RECYCLE_MSG_BUFFER_
 #define    _MSG_RECYCLE_MISS_TIME_MAX_    10    /* after @10 times miss, free the recycle       */
     jmsg_t                      *msg_recycle;   /* msg_recycle to avoid allocate, only one msg  */
     int32_t                     msg_recycle_len;/* msg_recycle carrier size                     */
     int32_t                     msg_recycle_miss;/* recycle_len too small times                 */
 #endif
 
-#ifdef     _JOB_IPC_MANAGEMENT_
-    struct  ipc_node            *node;
+#define _JOB_IPC_MANAGEMENT_ /*TODO: should remove*/
+#ifdef  _JOB_IPC_MANAGEMENT_
+    struct  ipc_thread          *thread;
 #endif
 
     int32_t                     msg_num;        /* current  message count           */

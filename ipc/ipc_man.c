@@ -7,36 +7,87 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/un.h>
+#include <event.h>
+#include <stdlib.h>
 
-#define IPC_NODE_UNIX       0x000000001
-#define IPC_NODE_TCP        0x000000002
-#define IPC_NODE_MASTER     0x000100000
-#define IPC_NODE_SLAVE      0x000200000
-#define IPC_NODE_WORKING    0x001000000
 
-struct ipc_node{
-    int32_t                     type;           /* IPC_UNIX | IPC_TCP               */
-    int                         unix_socket;
-    int                         tcp_socket;
-    struct sockaddr             unix_addr;
-    struct sockaddr             tcp_addr;
-    pthread_mutex_t             send_lock;      /* ONLY: send to socket              */
+#define IPC_LINK_UNIX       0x00000001
+#define IPC_LINK_TCP        0x00000002
+#define IPC_THREAD_MASTER   0x00010000
+#define IPC_THREAD_SLAVE    0x00020000
 
-    int32_t                     module;
-    char                        name[32];
+#define THREAD_LINK_MAX     10
 
-    int32_t                     *remote_jids;   /* jobs on remote peer of this node  */
-    int32_t                     jid_num;        /* length of remode_jids             */
-    job_t                       job;            /* local dispatching job             */
-    struct event_base           *base;          /* point to job.base                 */
-    struct event                timer;
+#define trace(stringinfo)    printf("%s: %d @%s ::"stringinfo"\n", __FILE__,__LINE__,__FUNCTION__);
 
-    struct ipc_node             *next;
+enum link_state {
+    ls_init,                        /* right after ipc_link is allocated            */
+    ls_accepted,                    /* ipc_link has been accepted                   */
+    ls_synced,                      /* ipc_link has received the remote link info   */
+    ls_runing,                      /* ipc_link is distributed to a ipc_thread      */
+    ls_sleeping,                    /* ipc_link has not receive jobs for a long time*/
+    ls_closed,                      /* ipc_link has been shutdown                   */
+};
+enum link_type {
+    lt_unix,
+    lt_tcp,
 };
 
-struct ipc_node *master = NULL;
+struct ipc_link {
+    enum link_state             state;  /* link state                                   */
+    enum link_type              type;   /* link type, socket family                     */
+    int                         socket;
+    int32_t                     module; /* remote module no */
+    char                        name[32];
+
+    event_callback_fn           ev_cb;
+    struct event                event;
+    union {
+        struct  sockaddr_un  un;
+        struct  sockaddr_in  tcp;
+    }                           addr;
+
+    job_t                       *worker;
+
+    struct ipc_thread           *thread;
+
+    struct ipc_link             *next;      /*use in ipc_thread, ipc_thread.links*/
+    struct ipc_link             *all_link;  /*used for all link,*/
+
+    struct job_info             *remote_jobs;
+    int32_t                     remote_jobnum;
+};
+
+typedef void *(pthread_fun_t)(void *);
+struct ipc_thread {
+    int32_t                     state;
+    int32_t                     index;
+    int32_t                     type;
+    pthread_t                   *tid;       /*&worker.tid*/
+    pthread_mutex_t             mutex;
+    pthread_cond_t              cond;
+    job_t                       worker;
+    struct event_base           *base;      /*worker.base*/
+    struct  ipc_link            *links;
+    int32_t                     nlinks;
+    struct ipc_thread           *next;
+};
+
+struct ipc_stat {
+    struct ipc_thread           *thread;
+    int32_t                     thread_num; /*including master*/
+    struct ipc_link             *all_link;
+    pthread_mutex_t             mutex;
+};
+
+#define new_struct(st)     (st *)calloc(1, sizeof(st))
+
+#define static
 #define SERVER_PORT   9898
 #define LOCAL_SOCK_PATH     "/tmp/ipc_man.sock"
+static struct ipc_stat          ipc_stat = {0};
+static struct ipc_thread        *master;
+
 
 static inline void j_destroy_msg(jmsg_t *msg) {
     memset(msg, 0x00, msg->msg_len + sizeof(jmsg_t));
@@ -124,6 +175,7 @@ static int32_t j_recv_cb(job_t *me, void* params, int32_t size) {
 }
 
 static int32_t j_sendto_cb(job_t *me, void* params, int32_t size) {
+    trace("");
     return write(me->write_fd, params, size);
 }
 
@@ -157,7 +209,7 @@ static void job_timer_process(int fd, short which, void *arg) {
         event_del(timer->event);
         j_timer_reclaim(me, timer->timerno);
     }
-    me->state_machine(timer->timerno, NULL, 0, me->jid);
+    me->state_machine(me, NULL, timer->timerno);
     me->timer_pending--;
 }
 
@@ -166,16 +218,16 @@ static void job_event_process(int fd, short which, void *arg) {
     jmsg_t  *msg;
     int32_t msgno;
 
+    trace();
     if(me->before_recv && me->before_recv(me, &msgno, sizeof(msgno)) < 0) {
         return;
     }
 
     msg = j_pop_msg(me);
     if(msg) {
-        me->state_machine(msg->msg_no, msg->content, msg->msg_len, msg->sender);
+        me->state_machine(me, msg, msg->msg_no);    /* link_state_machine */
         j_msg_reclaim(me, msg);
     }
-
     return;
 }
 
@@ -198,6 +250,8 @@ static int32_t job_setup(job_t* me) {
     me->read_fd = fd[0];
     me->write_fd = fd[1];
     pthread_mutex_init(&me->lock, 0);
+    me->tid = pthread_self();
+
     me->before_recv  = j_recv_cb;
     me->after_sendto = j_sendto_cb;
 
@@ -239,7 +293,7 @@ static jtimer_t *j_get_timer(job_t *job) {
 }
 
 job_t *job_find(int32_t jid) {
-    job_t *job = &master->job;
+    job_t *job = &ipc_stat.thread->worker;
 
     for( ; job != NULL ; job = job->next ) {
         if(job->jid == jid) {
@@ -251,7 +305,7 @@ job_t *job_find(int32_t jid) {
 }
 
 job_t *job_self() {
-    job_t       *job = &master->job;
+    job_t       *job = &ipc_stat.thread->worker;
     pthread_t   tid = pthread_self();
 
     for( ; job != NULL; job = job->next ) {
@@ -319,7 +373,7 @@ int32_t job_asend(int32_t recv_jid, int32_t msgno, void *content, int32_t len) {
 }
 
 void job_probe() {
-    job_t *job = &master->job;
+    job_t *job = &ipc_stat.thread->worker;
 
     printf("%10s\t %10s\t %10s\t %10s\t %10s\t timer_pending\n", "JOB_ID", "request", "processed", "pending", "timers");
     for(; job != NULL ; job = job->next) {
@@ -354,57 +408,7 @@ static int create_socket(int family, int type, int protocal) {
     return sfd;
 }
 
-
-static struct ipc_node *make_ipc_node(char *name) {
-    struct ipc_node *node = calloc(1, sizeof(struct ipc_node));
-
-    if(node == NULL) {
-        return NULL;
-    }
-
-    if(job_setup(&node->job)) {
-        free(node);
-        return NULL;
-    }
-    pthread_mutex_init(&node->send_lock, 0);
-    node->base = node->job.base;
-    if(name) {
-        strncpy(node->name, name, sizeof(node->name) - 1);
-    }
-
-    return node;
-}
-
-static inline  char *strify_sock_addr(struct sockaddr *addr) {
-    return "";
-}
-
-
-static void slave_timeout_process(int fd, short which, void *arg) {
-
-}
-
-static void master_timeout_process(int fd, short which, void *arg) {
-    struct ipc_node *node = (struct ipc_node*)arg;
-    /* maintain the nodes */
-    printf("Master timeout....\n");
-    job_probe();
-    return;
-}
-
-
-static struct ipc_node *node_of_model(int32_t module) {
-    struct ipc_node *node = master;
-
-    for(; node; node = node->next) {
-        if(node->module == module) {
-            break;
-        }
-    }
-    return node;
-}
-
-static int32_t slave_try_read_all(int fd, void *buff, int len) {
+static int32_t link_try_read_all(int fd, void *buff, int len) {
     int  read_bytes = 0, once_read, err;
     int  blocked = 0, max_block = (len/4096 + 2);
     char *p = (char*) buff;
@@ -421,7 +425,7 @@ static int32_t slave_try_read_all(int fd, void *buff, int len) {
             } else if(err == ENOTCONN) {
                  return ERR_SOCK_CON;
             } else {
-                printf("Try read message (length %d) from socket(%d) error: %d\n", len, fd, err);
+                printf("Try read message (length %d) from socket(%d) error: %s\n", len, fd, strerror(err));
                 return ERR_SOCK_RECV;
             }
         } else {
@@ -431,7 +435,7 @@ static int32_t slave_try_read_all(int fd, void *buff, int len) {
     return 0;
 }
 
-static int32_t slave_try_send_all(int fd, void *buff, int len) {
+static int32_t link_try_send_all(int fd, void *buff, int len) {
     int  wrote_bytes = 0, once_wrote, err;
     int  blocked = 0, max_block = (len/4096 + 2);
     char *p = (char*) buff;
@@ -459,107 +463,293 @@ static int32_t slave_try_send_all(int fd, void *buff, int len) {
     return 0;
 }
 
-static int32_t slave_dispacth_socket_msg(jmsg_t *msg) {
-    struct ipc_node *node = node_of_model(msg->r_module);
-    int             sock;
-    struct sockaddr *addr;
 
-    if(node == NULL) {
-        /* TODO error notify */
-        return -1;
+
+
+/*===================================================================================*/
+static inline void STAT_LOCK() {
+    pthread_mutex_lock(&ipc_stat.mutex);
+}
+static inline void STAT_UNLOCK() {
+    pthread_mutex_unlock(&ipc_stat.mutex);
+}
+
+static inline void THREAD_LOCK(struct ipc_thread *thread) {
+    pthread_mutex_lock(&thread->mutex);
+}
+static inline void THREAD_UNLOCK(struct ipc_thread *thread) {
+    pthread_mutex_unlock(&thread->mutex);
+}
+
+static inline void THREAD_WAIT(struct ipc_thread *thread) {
+    pthread_cond_wait(&thread->cond, &thread->mutex);
+}
+static inline void THREAD_SIGNAL(struct ipc_thread *thread) {
+    pthread_cond_signal(&thread->cond);
+}
+/*call by master thread*/
+static struct ipc_link *thread_make_link(struct ipc_thread *thread, enum link_type type) {
+    struct ipc_link *link = new_struct(struct ipc_link);
+
+    if(link == NULL) {
+        return NULL;
     }
-    msg->msg_no   = ntohl(msg->msg_no);
-    msg->msg_len  = ntohl(msg->msg_len);
-    msg->s_module = ntohl(msg->s_module);
-    msg->sender   = ntohl(msg->sender);
-    msg->receiver = ntohl(msg->receiver);
-    msg->r_module = ntohl(msg->r_module);
 
-    if(node->type & IPC_NODE_UNIX) {
-        sock = node->unix_socket;
-        addr = &node->unix_addr;
-    } else {
-        sock = node->tcp_socket;
-        addr = &node->unix_addr;
+    link->type   = type;
+    link->thread = thread;
+    link->state  = ls_init;
+    link->worker = &thread->worker;
+
+    link->next   = thread->links;
+    thread->links= link;
+    thread->nlinks++;
+
+    return link;
+}
+
+static struct ipc_thread *make_ipc_thread() {
+    struct ipc_thread *thread = new_struct(struct ipc_thread);
+    int32_t err;
+
+    if(thread == NULL) {
+        return NULL;
     }
+    pthread_mutex_init(&thread->mutex, NULL);
+    pthread_cond_init(&thread->cond, NULL);
+    err = job_setup(&thread->worker);
+    if(err) {
+        return NULL;
+    }
+    thread->base    = thread->worker.base;
+    thread->tid     = &thread->worker.tid;
 
-    pthread_mutex_lock(&node->send_lock);
-    slave_try_send_all(sock, msg, sizeof(jmsg_t) + msg->msg_len);       /*TODO: error notify */
-    pthread_mutex_unlock(&node->send_lock);
+    STAT_LOCK();
+    thread->index   = ipc_stat.thread_num++;
+    if(ipc_stat.thread) {
+        thread->worker.next = &ipc_stat.thread->worker;
+    }
+    thread->next    = ipc_stat.thread;
+    ipc_stat.thread = thread;
+    STAT_UNLOCK();
+
+    thread->worker.jid = thread->index;
+    thread->worker.thread = thread;
+
+    return thread;
+}
+
+static int32_t thread_start_monitor(struct ipc_thread *thread) {
+    event_base_loop(thread->base, 0);
+    return 0;
+}
+
+static int32_t thread_monitor_link(struct ipc_thread *thread, struct ipc_link *link, event_callback_fn cb) {
+    link->ev_cb  = cb;
+    if(event_assign(&link->event, thread->base, link->socket, EV_READ | EV_PERSIST, link->ev_cb, link)) {
+        trace("event assign link->event to thread base error");
+    }
+    if(event_add(&link->event, 0)) {
+        trace("event add link->event error");
+    }
 
     return 0;
 }
 
-static void slave_handle_error(int32_t error, jmsg_t *msg) {
+static void link_worker_cb(int fd, short which, void *arg);
+static void link_proc_new_link(job_t *job, jmsg_t *msg) {
+    struct ipc_link *link = NULL;
 
-}
-
-static void slave_socket_process(int fd, short which, void *arg) {
-    struct ipc_node *node = (struct ipc_node *)arg;
-    jmsg_t          *msg, peak = {0};
-    int32_t         error;
-    int             len = 0;
-
-    if(fd != node->unix_socket && fd != node->unix_socket) {
+    if(msg->msg_len != sizeof(link)) {
+        trace("message size error");
         return;
     }
 
-    printf("Node %s receive a message\n", node->name);
-    len = recv(fd, &peak, sizeof(peak), MSG_PEEK);
-    if(len < sizeof(peak)) {
-      printf("Node %s receive message length to small\n", node->name);
-      return;
+    link = *(struct ipc_link **)msg->content;
+
+    thread_monitor_link(job->thread, link, link_worker_cb);
+
+    return;
+}
+
+static struct ipc_link *link_of_thread_msg(struct ipc_thread *thread, jmsg_t *msg) {
+    struct ipc_link *link = thread->links;
+
+    for(; link != NULL; link = link->next) {
+        if(link->socket == msg->link_fd) {
+            break;
+        }
     }
 
-    msg = j_alloc_msg(ntohl(peak.msg_len));
+    return link;
+}
+
+static void link_proc_init_req(job_t *me, jmsg_t *msg) {
+    struct  link_info_msg *li = (struct link_info_msg *)msg->content;
+    struct  job_info      *ji;
+    int32_t i = 0;
+    struct ipc_link *link = link_of_thread_msg(me->thread, msg);
+
+    trace();
+    if(link == NULL) {
+        trace("can not find link in current thread for fd\n");
+        return;
+    }
+
+    link->remote_jobnum = li->job_num;
+    link->module        = li->module;
+
+    printf("module <%s>(%d) has the following jobs\n", li->name, li->module);
+    for(ji = li->jobs; i < link->remote_jobnum; i++, ji++) {
+        printf("<jid: %d, name: %s>\n", ji->jid, ji->name);
+    }
+
+    return;
+}
+
+static void link_state_machine(job_t *job, jmsg_t *msg, int32_t msgno) {
+    printf("link_state_machine: receive message, fd %d message no. 0x%08x\n", msg->link_fd, msgno);
+
+    switch(msgno) {
+    case JMSG_NEW_LINK:
+        link_proc_new_link(job, msg);
+        break;
+    case JMSG_INIT_REQ:
+        link_proc_init_req(job, msg);
+        break;
+    default:
+        break;
+    }
+
+    return;
+}
+
+static void *ipc_thread_entry(void *arg) {
+    struct ipc_thread **thread = (struct ipc_thread **)arg;
+
+    trace("new thread is initializing");
+    *thread = make_ipc_thread();
+    if(*thread == NULL) {
+        THREAD_SIGNAL(master);
+        return NULL;
+    }
+    (*thread)->worker.state_machine = link_state_machine;
+
+    /* can not be put after &thread_start_monitor, it will block */
+    THREAD_SIGNAL(master);
+
+    thread_start_monitor(*thread);
+
+    return NULL;
+}
+
+
+static struct ipc_thread *start_new_ipc_thread(struct ipc_thread **thread) {
+    pthread_t tid;
+
+    THREAD_LOCK(master);
+    trace("before pthread_create");
+    if(pthread_create(&tid, NULL, ipc_thread_entry, (void*)thread)) {
+        THREAD_UNLOCK(master);
+        printf("pthread_create create thread error: entry\n");
+        return NULL;
+    }
+    /* *thread value is need to be return, so wait for the new thread to set it's value */
+    trace("waiting for thread created signal");
+    THREAD_WAIT(master);
+    THREAD_UNLOCK(master);
+
+    return *thread;
+}
+
+
+static struct ipc_thread *thread_for_new_link(int sock, enum link_type type) {
+    struct ipc_thread *thread = NULL;
+    struct ipc_link   *link;
+
+    for(link = ipc_stat.all_link; link != NULL; link = link->all_link) {
+        if(link->socket == sock) {
+            /*TODO: already exist */
+            return thread;
+        }
+    }
+    /*the last allocated thread is always at the head, may be master*/
+    STAT_LOCK();
+    thread = ipc_stat.thread;
+    STAT_UNLOCK();
+
+
+    if(thread->index == 0 || thread->nlinks >= THREAD_LINK_MAX) {
+        thread = NULL;
+        start_new_ipc_thread(&thread);
+    }
+
+    return thread;
+}
+
+int32_t link_dispacth_socket_msg(struct ipc_link *me, jmsg_t *msg) {
+    /* send to myself, management message */
+    if(msg->r_module == me->module || msg->r_module == 0) {
+
+        j_push_msg(me->worker, msg);
+        /* to activate a read event for the receiver thread */
+        if(me->worker->after_sendto) {
+             me->worker->after_sendto(me->worker, &msg->msg_no, sizeof(msg->msg_no));
+             trace("");
+        }
+        return 0;
+    }
+
+    trace("try to forward message...");
+
+    return 0;
+}
+
+int32_t link_handle_error(struct ipc_link *me, jmsg_t *msg, int32_t error) {
+    return 0;
+}
+
+static void link_worker_cb(int fd, short which, void *arg) {
+    struct ipc_link    *me = ( struct ipc_link *)arg;
+    jmsg_t             peak, *msg;
+    int                len, error;
+
+    trace();
+    assert(me->socket == fd);
+
+    len = recv(fd, &peak, sizeof(peak), MSG_PEEK);
+    if(len < sizeof(peak)) {
+        printf("link for module %d receive message length to small\n", me->module);
+        return;
+    }
+
+    printf("Receive message %d, len %d (all %d)\n", peak.msg_no,  peak.msg_len, len + peak.msg_len);
+    msg = j_alloc_msg(peak.msg_len);
     if(msg == NULL) {
         return ;
     }
 
-    error = slave_try_read_all(fd, msg, peak.msg_len + sizeof(jmsg_t));
+    error = link_try_read_all(fd, msg, peak.msg_len + sizeof(jmsg_t));
     if(error) {
-        slave_handle_error(error, msg);
+        printf("slave_try_read_all error\n");
+        link_handle_error(me, msg, error);
         return;
     }
-    slave_dispacth_socket_msg(msg);
+
+    msg->link_fd = fd;
+    link_dispacth_socket_msg(me, msg);
     return;
+
 }
 
+static void link_accept_cb(int fd, short which, void *arg) {
+    struct ipc_link    *me = ( struct ipc_link *)arg, *link;
+    struct sockaddr_un  addr;        /*with max size*/
+    struct ipc_thread   *thread;
+    socklen_t           len = sizeof(struct sockaddr_un);
+    int                 min_msgsize = sizeof(jmsg_t);
+    int                 accept_fd = accept(fd, (struct sockaddr *)&addr, &len);
 
-
-
-static void slave_inner_event_machine(int32_t msgno, void *content, int32_t len, int32_t sender_jid);
-static void *start_ipc_node(void *arg);
-
-static int32_t start_ipc_slave(struct ipc_node *slave) {
-
-    struct ipc_node *node;
-    pthread_attr_t  attr  = {0};
-
-    while(node->next) {
-        node = node->next;
-    }
-    node->next      = slave;
-    node->job.next  = &slave->job;
-    slave->job.jid  = node->job.jid - 1;
-    slave->job.state_machine = slave_inner_event_machine;
-
-    pthread_create(&slave->job.tid, &attr, start_ipc_node, (void*)slave);
-    job_asend(slave->job.jid, JMSG_INIT, NULL, 0);
-
-    printf("slave thread created\n");
-
-    return 0;
-}
-
-
-static void master_socket_process(int fd, short which, void *arg) {
-    struct ipc_node *node;
-    struct sockaddr addr;
-    socklen_t       len;
-    int             min_msgsize = sizeof(jmsg_t);
-    int accept_fd = accept(fd, &addr, &len);
-    printf("master accept new connection %d\n", accept_fd);
+    printf("master accept new connection %d, len %d\n", accept_fd, len);
 
     if(accept_fd == -1) {
         return;
@@ -572,153 +762,91 @@ static void master_socket_process(int fd, short which, void *arg) {
     }
 
     if(setsockopt(accept_fd, SOL_SOCKET, SO_RCVLOWAT, (void *)&min_msgsize, sizeof(int))) {
-        printf("Set socket reuse address error.\n");
+         printf("Set socket reuse address error.\n");
     }
 
-    /* Do not check the existence of this connection node.
-     * IF this is a re-link of a node, the old node data will be useless,
-     * Useless node should be remove by the management thread.
-     */
-    node = make_ipc_node(NULL); /*TODO, check existence */
+    /* find or create a thread to manage the new link */
 
-    if(node == NULL) {
+    thread = thread_for_new_link(accept_fd, me->type);
+    if(thread == NULL) {
+        printf("find or create thread to work for new connection %d error\n", accept_fd);
         close(accept_fd);
-        printf("Make IPC node for address: %s error.\n", strify_sock_addr(&addr));
         return;
     }
-    switch(addr.sa_family) {
-    case AF_UNIX:
-        node->type |= IPC_NODE_UNIX;
-        memcpy(&node->unix_addr, &addr, sizeof(addr));
-        node->unix_socket = fd;
-        break;
-    case AF_INET:
-        node->type |= IPC_NODE_TCP;
-        memcpy(&node->tcp_addr, &addr, sizeof(addr));
-        node->tcp_socket = fd;
-        break;
-    default:
-        printf("Client type not support for type.\n", addr.sa_family);
-        break;
+
+    link   = thread_make_link(thread, me->type);
+    if(link == NULL) {
+        printf("find or create new link for new connection %d error\n", accept_fd);
+        close(accept_fd);
+        return;
     }
 
-    node->type |= IPC_NODE_SLAVE;
+    link->socket = accept_fd;
 
-    printf("Trying to start a slave node for new connection %d...\n", accept_fd);
-    start_ipc_slave(node);
+    memcpy(&link->addr, &addr, sizeof(addr));
+    printf("new link: %p, %p\n", &link, link);
+    job_asend(thread->worker.jid, JMSG_NEW_LINK, &link , sizeof(link));
+
+    /* FIXME: accepted address for unix socket has error in sun_family  */
+
+    /* can not add new event to a event_base in other thread directly   */
+    /* thread_monitor_link(thread, link, link_worker_cb);               */
 
     return;
 }
 
-static void *start_ipc_node(void *arg) {
-    struct ipc_node     *node = arg;
-    struct event        *ev;
-    struct timeval      tv = {1,0};
-    event_callback_fn   socket_cb = NULL, timer_cb = NULL;
+static int32_t  start_ipc_master(struct ipc_thread *thread) {
+    struct ipc_link *unix = NULL, *tcp = NULL;
+    struct stat tstat;
+#define error_clean(is_error, error)  if(is_error) {printf("%d: error occur in start_ipc_master, exit(%s)\n", __LINE__, strerror(errno));exit(error); }
 
-    if(node->type & IPC_NODE_MASTER) {
-        socket_cb = master_socket_process;
-        timer_cb  = master_timeout_process;
-    } else {
-        socket_cb = slave_socket_process;
-        timer_cb  = slave_timeout_process;
-    }
+    unix = thread_make_link(thread, lt_unix);
+    error_clean(unix == NULL, -1);
 
-    if(node->type & IPC_NODE_TCP) {
-        ev = event_new(node->base, node->tcp_socket, EV_READ | EV_PERSIST, socket_cb, node);
-        event_add(ev, 0);
-    }
-    if(node->type & IPC_NODE_UNIX) {
-        ev = event_new(node->base, node->unix_socket, EV_READ | EV_PERSIST, socket_cb, node);
-        event_add(ev, 0);
-    }
+    tcp = thread_make_link(thread, lt_tcp);
+    error_clean(tcp == NULL, -1);
 
-    evtimer_assign(&node->timer, node->base, timer_cb, node);
-    event_add(&node->timer, &tv);
+    unix->socket = create_socket(AF_UNIX, SOCK_STREAM, 0);
+    error_clean(unix->socket < 0, -1);
+    unix->addr.un.sun_family = AF_UNIX;
+    snprintf(unix->addr.un.sun_path, sizeof(unix->addr.un.sun_path), "%s", LOCAL_SOCK_PATH);
 
-    event_base_loop(node->base, 0);
-
-    return NULL;
-}
-
-
-static void master_inner_event_machine(int32_t msgno, void *content, int32_t len, int32_t sender_jid) {
-
-}
-
-static int32_t start_ipc_master(struct ipc_node *master) {
-    struct sockaddr_in  *addr    = NULL;
-    struct sockaddr_un  *unaddr  = NULL;
-    struct stat         tstat;
-
-#define error_clean(error)      exit(error)
-    if(-1 >= (master->tcp_socket  = create_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP))) {
-        error_clean(ERR_SOCK_CREATE);
-    }
-
-    if(-1 > (master->unix_socket = create_socket(AF_UNIX, SOCK_STREAM, IPPROTO_TCP))) {
-        error_clean(ERR_SOCK_CREATE);
-    }
-
-    addr = (struct sockaddr_in*)(&(master->tcp_addr));
-    addr->sin_family = AF_INET;
-    addr->sin_addr.s_addr   = htonl(INADDR_ANY);
-    addr->sin_port   = htons(SERVER_PORT);
-    if(bind(master->tcp_socket, (struct sockaddr *)addr, sizeof(struct sockaddr))) {
-        error_clean(ERR_SOCK_BIND);
-    }
-
-    unaddr = (struct sockaddr_un*)(&(master->unix_addr));
-    unaddr->sun_family = AF_UNIX;
-    strncpy(unaddr->sun_path, LOCAL_SOCK_PATH, sizeof(unaddr->sun_path) - 1);
     if (lstat(LOCAL_SOCK_PATH, &tstat) == 0) {
         if (S_ISSOCK(tstat.st_mode)) {
             unlink(LOCAL_SOCK_PATH);
         }
     }
-    if(bind(master->unix_socket, (struct sockaddr *)unaddr, sizeof(struct sockaddr_un))) {
-        error_clean(ERR_SOCK_BIND);
-    }
+    error_clean(0 != bind(unix->socket, (struct sockaddr *)&unix->addr.un, sizeof(unix->addr.un)), -1);
+    error_clean(0 != listen(unix->socket, 10), -1);
 
-    if(listen(master->tcp_socket, 6)) {
-        error_clean(ERR_SOCK_LISTEN);
-    }
+    tcp->socket = create_socket(AF_INET, SOCK_STREAM, 0);
+    error_clean(tcp->socket < 0, -1);
+    tcp->addr.tcp.sin_family = AF_INET;
+    tcp->addr.tcp.sin_port   = htons(SERVER_PORT);
+    tcp->addr.tcp.sin_addr.s_addr = htonl(INADDR_ANY);
 
-    if(listen(master->unix_socket, 6)) {
-        error_clean(ERR_SOCK_LISTEN);
-    }
+    error_clean(0 != bind(tcp->socket, (struct sockaddr *)&tcp->addr.tcp, sizeof(tcp->addr.tcp)), -1);
+    error_clean(0 != listen(tcp->socket, 10), -1);
 
-    master->type = IPC_NODE_UNIX|IPC_NODE_TCP|IPC_NODE_MASTER; /*TODO*/
-    master->job.state_machine = master_inner_event_machine;
-    start_ipc_node(master);
+    thread_monitor_link(thread, unix, link_accept_cb);
+    thread_monitor_link(thread, tcp,  link_accept_cb);
 
+    thread_start_monitor(thread);
 #undef error_clean
-
     return 0;
 }
 
-
 int main() {
-    master = make_ipc_node("master");
-
+    pthread_mutex_init(&ipc_stat.mutex, NULL);
+    master = make_ipc_thread();
     if(master == NULL) {
-        printf("Make ipc master node error.\n");
+        printf("make master thread error\n");
         exit(-1);
     }
     start_ipc_master(master);
-
     return 0;
 }
 
 
-static void slave_inner_event_machine(int32_t msgno, void *content, int32_t len, int32_t sender_jid) {
-    job_t *job = job_self();
-    struct ipc_node *node = job->node;
-    switch(msgno) {
-    case JMSG_INIT:
-        break;
-    }
 
-
-}
 
