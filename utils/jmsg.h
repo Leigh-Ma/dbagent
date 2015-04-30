@@ -5,6 +5,8 @@
 #define         JMSG_INIT_REQ                   0x000000002
 #define         JMSG_INIT_ACK                   0x000000003
 
+#define         JMSG_CLOSE_LINK                 0x000000004
+
 
 
 

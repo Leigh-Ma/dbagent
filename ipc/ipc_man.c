@@ -26,7 +26,9 @@ enum link_state {
     ls_synced,                      /* ipc_link has received the remote link info   */
     ls_runing,                      /* ipc_link is distributed to a ipc_thread      */
     ls_sleeping,                    /* ipc_link has not receive jobs for a long time*/
-    ls_closed,                      /* ipc_link has been shutdown                   */
+    ls_shutdown   ,                 /* ipc_link has been shutdown by remote         */
+    ls_closed,                      /* ipc_link has been closed locally             */
+
 };
 enum link_type {
     lt_unix,
@@ -77,7 +79,9 @@ struct ipc_stat {
     struct ipc_thread           *thread;
     int32_t                     thread_num; /*including master*/
     struct ipc_link             *all_link;
-    pthread_mutex_t             mutex;
+    pthread_rwlock_t            rwlock;
+    struct ipc_link             *module_link[1024];
+
 };
 
 #define new_struct(st)     (st *)calloc(1, sizeof(st))
@@ -175,7 +179,6 @@ static int32_t j_recv_cb(job_t *me, void* params, int32_t size) {
 }
 
 static int32_t j_sendto_cb(job_t *me, void* params, int32_t size) {
-    trace("");
     return write(me->write_fd, params, size);
 }
 
@@ -218,7 +221,6 @@ static void job_event_process(int fd, short which, void *arg) {
     jmsg_t  *msg;
     int32_t msgno;
 
-    trace();
     if(me->before_recv && me->before_recv(me, &msgno, sizeof(msgno)) < 0) {
         return;
     }
@@ -465,14 +467,22 @@ static int32_t link_try_send_all(int fd, void *buff, int len) {
 
 
 
-
+static void link_worker_cb(int fd, short which, void *arg);
 /*===================================================================================*/
-static inline void STAT_LOCK() {
-    pthread_mutex_lock(&ipc_stat.mutex);
+static inline void STAT_W_LOCK() {
+    pthread_rwlock_trywrlock(&ipc_stat.rwlock);
 }
-static inline void STAT_UNLOCK() {
-    pthread_mutex_unlock(&ipc_stat.mutex);
+static inline void STAT_W_UNLOCK() {
+    pthread_rwlock_unlock(&ipc_stat.rwlock);
 }
+
+static inline void STAT_R_LOCK() {
+    pthread_rwlock_tryrdlock(&ipc_stat.rwlock);
+}
+static inline void STAT_R_UNLOCK() {
+    pthread_rwlock_unlock(&ipc_stat.rwlock);
+}
+
 
 static inline void THREAD_LOCK(struct ipc_thread *thread) {
     pthread_mutex_lock(&thread->mutex);
@@ -487,7 +497,60 @@ static inline void THREAD_WAIT(struct ipc_thread *thread) {
 static inline void THREAD_SIGNAL(struct ipc_thread *thread) {
     pthread_cond_signal(&thread->cond);
 }
+
+
 /*call by master thread*/
+
+static inline void thread_link_register(struct ipc_thread *thread, struct ipc_link *link) {
+    link->thread = thread;
+    link->worker = &thread->worker;
+
+    THREAD_LOCK(thread);
+    link->next   = thread->links;
+    thread->links= link;
+    thread->nlinks++;
+    THREAD_UNLOCK(thread);
+
+    STAT_W_LOCK();
+    link->all_link = ipc_stat.all_link;
+    ipc_stat.all_link = link;
+    STAT_W_UNLOCK();
+}
+
+static inline void thread_link_unregister(struct ipc_thread *thread, struct ipc_link *link) {
+    struct ipc_link *m;
+
+    printf("Thread(index:%d, links:%d) link(socket %d, type %d, status %d): Unregister link.\n",
+                     thread->index, thread->nlinks, link->socket, link->type, link->state);
+
+    THREAD_LOCK(link->thread);
+    m = link->thread->links;
+    if(m != link) {
+        for(; m && m->next != link; m = m->next) {
+        }
+        m->next = link->next;
+    } else {
+        link->thread->links =  link->next;
+    }
+    link->thread->nlinks--;
+    THREAD_UNLOCK(link->thread);
+
+    STAT_W_LOCK();
+    if(link == ipc_stat.module_link[link->module]) {
+        ipc_stat.module_link[link->module] = NULL;
+    }
+
+    m = ipc_stat.all_link;
+    if(m && m != link) {
+       for(; m && m->all_link != link; m = m->all_link) {
+       }
+       m->all_link = link->all_link;
+    } else {
+       ipc_stat.all_link =  link->next;
+    }
+    STAT_W_UNLOCK();
+}
+
 static struct ipc_link *thread_make_link(struct ipc_thread *thread, enum link_type type) {
     struct ipc_link *link = new_struct(struct ipc_link);
 
@@ -495,14 +558,9 @@ static struct ipc_link *thread_make_link(struct ipc_thread *thread, enum link_ty
         return NULL;
     }
 
-    link->type   = type;
-    link->thread = thread;
     link->state  = ls_init;
-    link->worker = &thread->worker;
-
-    link->next   = thread->links;
-    thread->links= link;
-    thread->nlinks++;
+    link->type   = type;
+    thread_link_register(thread, link);
 
     return link;
 }
@@ -523,14 +581,14 @@ static struct ipc_thread *make_ipc_thread() {
     thread->base    = thread->worker.base;
     thread->tid     = &thread->worker.tid;
 
-    STAT_LOCK();
+    STAT_W_LOCK();
     thread->index   = ipc_stat.thread_num++;
     if(ipc_stat.thread) {
         thread->worker.next = &ipc_stat.thread->worker;
     }
     thread->next    = ipc_stat.thread;
     ipc_stat.thread = thread;
-    STAT_UNLOCK();
+    STAT_W_UNLOCK();
 
     thread->worker.jid = thread->index;
     thread->worker.thread = thread;
@@ -544,6 +602,8 @@ static int32_t thread_start_monitor(struct ipc_thread *thread) {
 }
 
 static int32_t thread_monitor_link(struct ipc_thread *thread, struct ipc_link *link, event_callback_fn cb) {
+    printf("Thread(index:%d, links:%d) link(socket %d, type %d, status %d): start to monitor\n",
+                  thread->index, thread->nlinks, link->socket, link->type, link->state);
     link->ev_cb  = cb;
     if(event_assign(&link->event, thread->base, link->socket, EV_READ | EV_PERSIST, link->ev_cb, link)) {
         trace("event assign link->event to thread base error");
@@ -555,68 +615,150 @@ static int32_t thread_monitor_link(struct ipc_thread *thread, struct ipc_link *l
     return 0;
 }
 
-static void link_worker_cb(int fd, short which, void *arg);
-static void link_proc_new_link(job_t *job, jmsg_t *msg) {
-    struct ipc_link *link = NULL;
-
-    if(msg->msg_len != sizeof(link)) {
-        trace("message size error");
-        return;
-    }
-
-    link = *(struct ipc_link **)msg->content;
-
-    thread_monitor_link(job->thread, link, link_worker_cb);
-
-    return;
-}
 
 static struct ipc_link *link_of_thread_msg(struct ipc_thread *thread, jmsg_t *msg) {
-    struct ipc_link *link = thread->links;
+    struct ipc_link *link = NULL, *m;
 
-    for(; link != NULL; link = link->next) {
-        if(link->socket == msg->link_fd) {
-            break;
+    if(msg->msg_no == JMSG_NEW_LINK || msg->msg_no == JMSG_CLOSE_LINK) {
+        if(msg->msg_len != sizeof(link)) {
+           return NULL;
+        } else {
+            link = *(struct ipc_link **)msg->content;
         }
     }
 
-    return link;
+    for(m = thread->links; m != NULL; m = m->next) {
+       if((link == NULL && m->socket == msg->link_fd) || link == m) {
+           break;
+        }
+    }
+
+    return m;
 }
 
-static void link_proc_init_req(job_t *me, jmsg_t *msg) {
+static int32_t link_proc_new_link(struct ipc_link *link, jmsg_t *msg) {
+    return thread_monitor_link(link->thread, link, link_worker_cb);
+}
+
+static int32_t link_proc_close_link(struct ipc_link *link) {
+
+    close(link->socket);    /* this will cause an event, ??? actively close will not cause event? */
+
+    if(link->remote_jobs) {
+        free(link->remote_jobs);
+        link->remote_jobs = NULL;
+    }
+    event_del(&link->event);
+
+    thread_link_unregister(link->thread, link);
+    free(link);
+
+    return 0;
+}
+
+static int32_t link_proc_init_req(struct ipc_link *link, jmsg_t *msg) {
     struct  link_info_msg *li = (struct link_info_msg *)msg->content;
     struct  job_info      *ji;
+    struct ipc_link       *old_link = NULL;
     int32_t i = 0;
-    struct ipc_link *link = link_of_thread_msg(me->thread, msg);
 
-    trace();
-    if(link == NULL) {
-        trace("can not find link in current thread for fd\n");
-        return;
+    STAT_R_LOCK();
+    if((old_link = ipc_stat.module_link[li->module]) != NULL) {
+       /*TODO, should close the old link, or warning for module conflicts */
+       printf("\tWarning for module conflicts, notify the old link(socket %d) to close\n", old_link->socket);
+       job_asend(old_link->worker->jid, JMSG_CLOSE_LINK, &old_link, sizeof(old_link));
     }
+    STAT_R_UNLOCK();
 
     link->remote_jobnum = li->job_num;
     link->module        = li->module;
+    snprintf(link->name, sizeof(link->name), "%s", li->name);
 
-    printf("module <%s>(%d) has the following jobs\n", li->name, li->module);
+    if(link->remote_jobnum) {
+       link->remote_jobs   = calloc(li->job_num, sizeof(struct job_info));
+       if(link->remote_jobs != NULL) {
+           memcpy(link->remote_jobs, li, link->remote_jobnum * sizeof(struct job_info));
+       } else {
+           printf("Allocate memory error for remote jobs information.\n");
+           link->remote_jobs = 0;
+           return -1;
+       }
+    }
+    STAT_W_LOCK();
+    ipc_stat.module_link[li->module] = link;
+    STAT_W_UNLOCK();
+
+    printf("Thread(index:%d, links:%d) link(socket %d, type %d, status %d): module(%d, %s) has the following jobs: \n",
+                  link->thread->index, link->thread->nlinks, link->socket, link->type, link->state, link->module, link->name);
     for(ji = li->jobs; i < link->remote_jobnum; i++, ji++) {
-        printf("<jid: %d, name: %s>\n", ji->jid, ji->name);
+        printf("\t{jid: %d, name: %s}\n", ji->jid, ji->name);
     }
 
-    return;
+    return 0;
+}
+
+static struct ipc_link *link_of_link_msg(struct ipc_link *sender, jmsg_t *msg) {
+    struct ipc_link *receiver = NULL;
+
+    printf("Message from (%d %d) to (%d %d), content [%c]\n", msg->s_module, msg->sender, msg->r_module, msg->receiver, msg->content[0]);
+    /* send to myself, management message */
+    if(msg->r_module == sender->module || msg->r_module == 0) {
+        return sender;
+    }
+
+    STAT_R_LOCK();
+    receiver = ipc_stat.module_link[msg->r_module];
+    STAT_R_UNLOCK();
+
+    return receiver;
+}
+
+static int32_t link_proc_forward_msg(struct ipc_link *sender, jmsg_t *msg) {
+    struct ipc_link *me = link_of_link_msg(sender, msg);
+
+    if(me&&me->socket) {
+        printf("Forward message [%c] to socket %d\n", msg->content[0], me->socket);
+        link_try_send_all(me->socket, msg, msg->msg_len + sizeof(jmsg_t));
+    }
+
+    return 0;
 }
 
 static void link_state_machine(job_t *job, jmsg_t *msg, int32_t msgno) {
-    printf("link_state_machine: receive message, fd %d message no. 0x%08x\n", msg->link_fd, msgno);
+    struct ipc_link *link = link_of_thread_msg(job->thread, msg);
 
+#define _check_link_state(link, stat)                                                     \
+    if((link)->state != (stat)) {                                                         \
+        printf("\tMessage %d inappropriate for link state %d\n", msgno, stat);            \
+        return;                                                                           \
+    }
+
+#define _set_link_state(link, stat)   (link)->state = stat
+    if(link == NULL) {
+        return;
+    }
+    /*
+     printf("Thread(index:%d, links:%d) link(socket %d, type %d, status %d): receive message %d\n",
+               job->thread->index, job->thread->nlinks, link->socket, link->type, link->state, msgno);
+     */
     switch(msgno) {
     case JMSG_NEW_LINK:
-        link_proc_new_link(job, msg);
+        _check_link_state(link, ls_init);
+        if(0 == link_proc_new_link(link, msg) ) {
+            _set_link_state(link, ls_accepted);
+        }
         break;
     case JMSG_INIT_REQ:
-        link_proc_init_req(job, msg);
+        _check_link_state(link, ls_accepted);
+        if(0 == link_proc_init_req(link, msg) ) {
+            _set_link_state(link, ls_synced);
+        }
+        break;
+    case JMSG_CLOSE_LINK:
+        link_proc_close_link(link);
         break;
     default:
+        link_proc_forward_msg(link, msg);
         break;
     }
 
@@ -626,7 +768,6 @@ static void link_state_machine(job_t *job, jmsg_t *msg, int32_t msgno) {
 static void *ipc_thread_entry(void *arg) {
     struct ipc_thread **thread = (struct ipc_thread **)arg;
 
-    trace("new thread is initializing");
     *thread = make_ipc_thread();
     if(*thread == NULL) {
         THREAD_SIGNAL(master);
@@ -634,7 +775,7 @@ static void *ipc_thread_entry(void *arg) {
     }
     (*thread)->worker.state_machine = link_state_machine;
 
-    /* can not be put after &thread_start_monitor, it will block */
+    /* can not be put after @thread_start_monitor, it will block */
     THREAD_SIGNAL(master);
 
     thread_start_monitor(*thread);
@@ -647,14 +788,12 @@ static struct ipc_thread *start_new_ipc_thread(struct ipc_thread **thread) {
     pthread_t tid;
 
     THREAD_LOCK(master);
-    trace("before pthread_create");
     if(pthread_create(&tid, NULL, ipc_thread_entry, (void*)thread)) {
         THREAD_UNLOCK(master);
         printf("pthread_create create thread error: entry\n");
         return NULL;
     }
     /* *thread value is need to be return, so wait for the new thread to set it's value */
-    trace("waiting for thread created signal");
     THREAD_WAIT(master);
     THREAD_UNLOCK(master);
 
@@ -668,17 +807,18 @@ static struct ipc_thread *thread_for_new_link(int sock, enum link_type type) {
 
     for(link = ipc_stat.all_link; link != NULL; link = link->all_link) {
         if(link->socket == sock) {
-            /*TODO: already exist */
+            printf("Link exist in all link list for socket %d.\n", sock);
             return thread;
         }
     }
+
+
     /*the last allocated thread is always at the head, may be master*/
-    STAT_LOCK();
+    STAT_R_LOCK();
     thread = ipc_stat.thread;
-    STAT_UNLOCK();
+    STAT_R_UNLOCK();
 
-
-    if(thread->index == 0 || thread->nlinks >= THREAD_LINK_MAX) {
+    if(thread == NULL || thread->index == 0 || thread->nlinks >= THREAD_LINK_MAX) {
         thread = NULL;
         start_new_ipc_thread(&thread);
     }
@@ -686,25 +826,26 @@ static struct ipc_thread *thread_for_new_link(int sock, enum link_type type) {
     return thread;
 }
 
-int32_t link_dispacth_socket_msg(struct ipc_link *me, jmsg_t *msg) {
-    /* send to myself, management message */
-    if(msg->r_module == me->module || msg->r_module == 0) {
 
-        j_push_msg(me->worker, msg);
-        /* to activate a read event for the receiver thread */
-        if(me->worker->after_sendto) {
-             me->worker->after_sendto(me->worker, &msg->msg_no, sizeof(msg->msg_no));
-             trace("");
-        }
+
+static int32_t link_dispacth_socket_msg(struct ipc_link *me, jmsg_t *msg) {
+    struct ipc_link *aim = link_of_link_msg(me, msg);
+
+    if(aim == NULL) {
+        printf("Can not find aim link of message, aim {module: %d, job_id: %d}\n", msg->r_module, msg->receiver);
         return 0;
     }
 
-    trace("try to forward message...");
+    j_push_msg(aim->worker, msg);
+    /* to activate a read event for the receiver thread */
+    if(aim->worker->after_sendto) {
+        aim->worker->after_sendto(aim->worker, &msg->msg_no, sizeof(msg->msg_no));
+    }
 
     return 0;
 }
 
-int32_t link_handle_error(struct ipc_link *me, jmsg_t *msg, int32_t error) {
+static int32_t link_handle_error(struct ipc_link *me, jmsg_t *msg, int32_t error) {
     return 0;
 }
 
@@ -713,16 +854,21 @@ static void link_worker_cb(int fd, short which, void *arg) {
     jmsg_t             peak, *msg;
     int                len, error;
 
-    trace();
     assert(me->socket == fd);
 
     len = recv(fd, &peak, sizeof(peak), MSG_PEEK);
     if(len < sizeof(peak)) {
-        printf("link for module %d receive message length to small\n", me->module);
-        return;
+        if(len == 0) {
+            /* len == 0 when remote end close or local host close */
+            len = recv(fd, &peak, sizeof(peak), 0);
+            job_asend(me->worker->jid, JMSG_CLOSE_LINK, &me, sizeof(me));
+            return;
+        } else {
+            printf("Link for module %d receive message length to small\n", me->module);
+            return;
+        }
     }
 
-    printf("Receive message %d, len %d (all %d)\n", peak.msg_no,  peak.msg_len, len + peak.msg_len);
     msg = j_alloc_msg(peak.msg_len);
     if(msg == NULL) {
         return ;
@@ -730,12 +876,11 @@ static void link_worker_cb(int fd, short which, void *arg) {
 
     error = link_try_read_all(fd, msg, peak.msg_len + sizeof(jmsg_t));
     if(error) {
-        printf("slave_try_read_all error\n");
         link_handle_error(me, msg, error);
         return;
     }
 
-    msg->link_fd = fd;
+    msg->link_fd = fd; /* who received this */
     link_dispacth_socket_msg(me, msg);
     return;
 
@@ -749,7 +894,8 @@ static void link_accept_cb(int fd, short which, void *arg) {
     int                 min_msgsize = sizeof(jmsg_t);
     int                 accept_fd = accept(fd, (struct sockaddr *)&addr, &len);
 
-    printf("master accept new connection %d, len %d\n", accept_fd, len);
+    printf("Thread(index:%d, links:%d) link(socket %d, type %d, status %d): trying to accept new link for socket %d\n",
+                  me->thread->index, me->thread->nlinks, me->socket, me->type, me->state,accept_fd);
 
     if(accept_fd == -1) {
         return;
@@ -784,7 +930,6 @@ static void link_accept_cb(int fd, short which, void *arg) {
     link->socket = accept_fd;
 
     memcpy(&link->addr, &addr, sizeof(addr));
-    printf("new link: %p, %p\n", &link, link);
     job_asend(thread->worker.jid, JMSG_NEW_LINK, &link , sizeof(link));
 
     /* FIXME: accepted address for unix socket has error in sun_family  */
@@ -837,7 +982,7 @@ static int32_t  start_ipc_master(struct ipc_thread *thread) {
 }
 
 int main() {
-    pthread_mutex_init(&ipc_stat.mutex, NULL);
+    pthread_rwlock_init(&ipc_stat.rwlock, NULL);
     master = make_ipc_thread();
     if(master == NULL) {
         printf("make master thread error\n");
