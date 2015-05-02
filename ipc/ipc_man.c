@@ -483,7 +483,6 @@ static inline void STAT_R_UNLOCK() {
     pthread_rwlock_unlock(&ipc_stat.rwlock);
 }
 
-
 static inline void THREAD_LOCK(struct ipc_thread *thread) {
     pthread_mutex_lock(&thread->mutex);
 }
@@ -742,6 +741,13 @@ static void link_state_machine(job_t *job, jmsg_t *msg, int32_t msgno) {
                job->thread->index, job->thread->nlinks, link->socket, link->type, link->state, msgno);
      */
     switch(msgno) {
+    case JMSG_NEW_THREAD:
+        printf("JMSG_NEW_THREAD\n");
+        job_settimer(JMSG_TIMER_1, 5, JOB_TIMER_LOOP);
+        break;
+    case JMSG_TIMER_1:
+        printf("timer %x timeout\n", JMSG_TIMER_1);
+        break;
     case JMSG_NEW_LINK:
         _check_link_state(link, ls_init);
         if(0 == link_proc_new_link(link, msg) ) {
@@ -821,6 +827,11 @@ static struct ipc_thread *thread_for_new_link(int sock, enum link_type type) {
     if(thread == NULL || thread->index == 0 || thread->nlinks >= THREAD_LINK_MAX) {
         thread = NULL;
         start_new_ipc_thread(&thread);
+        /* FIXME: wait for the thread to call event_base_loop; then send a init message to the thread；
+         * the thread will block at event_base_loop, so the init message can not be send by
+         * the thread its self, this will be done by a timer
+         */
+
     }
 
     return thread;
@@ -975,7 +986,7 @@ static int32_t  start_ipc_master(struct ipc_thread *thread) {
 
     thread_monitor_link(thread, unix, link_accept_cb);
     thread_monitor_link(thread, tcp,  link_accept_cb);
-
+    thread->worker.state_machine = link_state_machine;  /*FIXME*/
     thread_start_monitor(thread);
 #undef error_clean
     return 0;
